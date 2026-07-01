@@ -151,3 +151,32 @@ export async function getPreviousWorkoutStats(exerciseId: string): Promise<SetSt
     weight_kg: log.weight_kg ? parseFloat(log.weight_kg) : null,
   }))
 }
+
+/**
+ * Server Action untuk menghapus sesi latihan (Session).
+ * Digunakan saat membatalkan sesi kosong atau merestart latihan.
+ */
+export async function deleteWorkoutSessionAction(sessionId: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    throw new Error('Anda harus login untuk menghapus sesi latihan.')
+  }
+
+  const { error } = await supabase
+    .from('sessions')
+    .delete()
+    .eq('id', sessionId)
+    .eq('user_id', user.id) // Pengaman tambahan
+
+  if (error) {
+    throw new Error(`Gagal menghapus sesi latihan: ${error.message}`)
+  }
+
+  revalidatePath('/workout')
+}

@@ -14,16 +14,60 @@ export default async function EditPlanPage({ params }: PageProps) {
 
   const supabase = await createClient()
 
-  // 1. Ambil detail plan
-  const { data: plan, error: planError } = await supabase
-    .from('plans')
-    .select('*')
-    .eq('id', planId)
-    .single()
+  // Ambil data user
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    redirect('/login')
+  }
+
+  // Parse shortId jika planId berbentuk `slug-shortId` (e.g. `split-3-hari-1678ec4e`)
+  let shortId = planId
+  if (planId.includes('-')) {
+    const parts = planId.split('-')
+    const lastPart = parts[parts.length - 1]
+    if (lastPart.length === 8 && /^[0-9a-fA-F]+$/.test(lastPart)) {
+      shortId = lastPart
+    }
+  }
+
+  let plan = null
+  let planError = null
+
+  // Cek apakah planId adalah UUID penuh
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(planId)
+
+  if (isUUID) {
+    const { data, error } = await supabase
+      .from('plans')
+      .select('*')
+      .eq('id', planId)
+      .single()
+    plan = data
+    planError = error
+  } else {
+    // Ambil plans user, cari yang berawalan shortId
+    const { data: userPlans, error: fetchError } = await supabase
+      .from('plans')
+      .select('*')
+      .eq('user_id', user.id)
+    
+    if (userPlans) {
+      plan = userPlans.find((p: any) => p.id.substring(0, 8) === shortId) || null
+    }
+    if (fetchError && !plan) {
+      planError = fetchError
+    }
+  }
 
   if (planError || !plan) {
     redirect('/workout')
   }
+
+  const actualPlanId = plan.id
 
   // 2. Ambil kategori dan nested exercises
   const { data: categories, error: catError } = await supabase
@@ -45,7 +89,7 @@ export default async function EditPlanPage({ params }: PageProps) {
         )
       )
     `)
-    .eq('plan_id', planId)
+    .eq('plan_id', actualPlanId)
     .order('created_at')
 
   const initialCategories = categories ? categories.map((cat: any) => {

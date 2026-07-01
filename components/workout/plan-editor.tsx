@@ -7,6 +7,8 @@ import { ChevronUp, ChevronDown, Trash2, Plus, X, Search, Dumbbell, Target, Save
 import { useTapFeedback } from '@/hooks/use-tap-feedback'
 import { savePlanDetailsAction, SaveCategoryInput } from '@/lib/actions/plans'
 import { createClient } from '@/lib/supabase/client'
+import { SearchableSelect, SelectOption } from '@/components/ui/searchable-select'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 interface ExerciseDetail {
   id: string
@@ -38,7 +40,8 @@ interface PlanEditorProps {
   initialCategories: LocalCategory[]
 }
 
-const DAYS_OF_WEEK = [
+const DAYS_OF_WEEK_OPTIONS: SelectOption[] = [
+  { value: 'none', label: '(Tanpa Hari)' },
   { value: 'senin', label: 'Senin' },
   { value: 'selasa', label: 'Selasa' },
   { value: 'rabu', label: 'Rabu' },
@@ -66,6 +69,7 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
   // State Save
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [catIdToDelete, setCatIdToDelete] = useState<string | null>(null)
 
   const { ref: saveBtnRef, onPointerDown: saveBtnDown } = useTapFeedback()
 
@@ -82,8 +86,13 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
   }
 
   const deleteCategory = (catId: string) => {
-    if (!confirm('Hapus kategori ini beserta semua latihan di dalamnya?')) return
-    setCategories(categories.filter((cat) => cat.id !== catId))
+    setCatIdToDelete(catId)
+  }
+
+  const confirmDeleteCategory = () => {
+    if (!catIdToDelete) return
+    setCategories(categories.filter((cat) => cat.id !== catIdToDelete))
+    setCatIdToDelete(null)
   }
 
   const updateCategoryName = (catId: string, name: string) => {
@@ -240,21 +249,21 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
   return (
     <div className="space-y-6">
       {/* Top Navigation & Action Buttons */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b" style={{ borderColor: 'var(--border)' }}>
+      <div className="space-y-4 pb-4 border-b" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center gap-3">
           <Link
             href="/workout"
-            className="p-2 rounded-lg border hover:bg-[--surface-raised] transition-colors"
+            className="p-2 rounded-xl border hover:bg-[--surface-raised] transition-colors flex-shrink-0"
             style={{ borderColor: 'var(--border)', color: 'var(--chalk-muted)' }}
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <input
               type="text"
               value={planName}
               onChange={(e) => setPlanName(e.target.value)}
-              className="text-3xl font-display font-bold uppercase tracking-wider bg-transparent border-b border-transparent hover:border-[--border] focus:border-[--chalk-muted] focus:outline-none py-1 px-2 transition-colors rounded max-w-md w-full"
+              className="text-2xl font-display font-extrabold uppercase tracking-wide bg-transparent border-b border-transparent hover:border-[--border] focus:border-[--chalk-muted] focus:outline-none py-1 px-2 transition-colors rounded w-full"
               style={{ color: 'var(--chalk)' }}
               placeholder="NAMA TEMPLATE"
             />
@@ -266,13 +275,14 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
           onPointerDown={saveBtnDown}
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center justify-center gap-2 py-3 px-6 rounded-lg text-xs font-bold tracking-wider font-display uppercase cursor-pointer disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl text-xs font-bold tracking-wider font-display uppercase cursor-pointer disabled:opacity-50 transition-all active:scale-[0.98]"
           style={{
             backgroundColor: 'var(--intensity)',
+            backgroundImage: 'linear-gradient(135deg, var(--intensity), #ff5a3d)',
             color: 'var(--chalk)',
           }}
         >
-          <Save className="w-4 h-4" />
+          <Save className="w-3.5 h-3.5" />
           {saving ? 'Menyimpan...' : 'Simpan Rencana'}
         </button>
       </div>
@@ -302,47 +312,70 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
             }}
           >
             {/* Category Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
-              <div className="flex items-center gap-3 flex-1">
-                <span className="font-display text-sm font-bold opacity-30">#{catIdx + 1}</span>
-                <input
-                  type="text"
-                  value={cat.category_name}
-                  onChange={(e) => updateCategoryName(cat.id, e.target.value)}
-                  className="font-display text-xl font-bold uppercase tracking-wide bg-transparent border-b border-transparent hover:border-[--border] focus:border-[--chalk-muted] focus:outline-none py-0.5 px-1.5 transition-colors rounded w-full max-w-xs"
-                  style={{ color: 'var(--chalk)' }}
-                  placeholder="Kategori Otot"
-                />
+            <div className="space-y-3.5 pb-3.5 border-b" style={{ borderColor: 'var(--border)' }}>
+              {/* Row 1: Number Badge, Input Name, and Delete Button */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="font-display text-xs font-extrabold px-2.5 py-1 rounded-lg flex-shrink-0 text-white/50" style={{ backgroundColor: 'var(--surface-raised)', border: '1px solid var(--border)' }}>
+                    #{catIdx + 1}
+                  </span>
+                  <input
+                    type="text"
+                    value={cat.category_name}
+                    onChange={(e) => updateCategoryName(cat.id, e.target.value)}
+                    className="font-display text-lg font-bold uppercase tracking-wide bg-transparent border-b border-transparent hover:border-[--border] focus:border-[--chalk-muted] focus:outline-none py-0.5 px-1.5 transition-colors rounded w-full text-white min-w-0"
+                    placeholder="Nama Kategori (misal: Chest & Triceps)"
+                  />
+                </div>
                 
-                {/* Select Day */}
-                <select
-                  value={cat.day_of_week || ''}
-                  onChange={(e) => updateCategoryDay(cat.id, e.target.value || null)}
-                  className="py-1 px-2 text-xs border rounded-lg focus:outline-none font-body"
-                  style={{
-                    backgroundColor: 'var(--surface-raised)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--chalk-muted)',
-                  }}
+                {/* Delete Category Button */}
+                <button
+                  onClick={() => deleteCategory(cat.id)}
+                  className="p-2 rounded-xl border cursor-pointer hover:bg-[--surface-raised] transition-colors flex-shrink-0"
+                  style={{ borderColor: 'var(--border)', color: 'var(--intensity)' }}
+                  title="Hapus Kategori"
                 >
-                  <option value="">(Tanpa Hari)</option>
-                  {DAYS_OF_WEEK.map((d) => (
-                    <option key={d.value} value={d.value}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
 
-              {/* Delete Category Button */}
-              <button
-                onClick={() => deleteCategory(cat.id)}
-                className="p-1.5 rounded-lg border cursor-pointer hover:bg-[--surface-raised] transition-colors"
-                style={{ borderColor: 'var(--border)', color: 'var(--intensity)' }}
-                title="Hapus Kategori"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {/* Row 2: Day of Week Selection - Premium Interactive Pills */}
+              <div className="flex flex-col gap-1.5 pt-0.5">
+                <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--chalk-muted)' }}>
+                  Jadwal Latihan
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { value: 'senin', label: 'Sen' },
+                    { value: 'selasa', label: 'Sel' },
+                    { value: 'rabu', label: 'Rab' },
+                    { value: 'kamis', label: 'Kam' },
+                    { value: 'jumat', label: 'Jum' },
+                    { value: 'sabtu', label: 'Sab' },
+                    { value: 'minggu', label: 'Min' },
+                  ].map((d) => {
+                    const isSelected = cat.day_of_week === d.value
+                    return (
+                      <button
+                        key={d.value}
+                        type="button"
+                        onClick={() => updateCategoryDay(cat.id, isSelected ? null : d.value)}
+                        className={`px-2 py-1 rounded-lg text-[9px] font-extrabold font-display uppercase tracking-wider cursor-pointer transition-all active:scale-95 ${
+                          isSelected
+                            ? 'text-white'
+                            : 'text-[var(--chalk-muted)] border border-[var(--border)] hover:bg-[var(--surface-raised)]'
+                        }`}
+                        style={{
+                          backgroundColor: isSelected ? 'var(--intensity)' : 'var(--surface-raised)',
+                          backgroundImage: isSelected ? 'linear-gradient(135deg, var(--intensity), #ff5a3d)' : 'none',
+                        }}
+                      >
+                        {d.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Exercises List inside Category */}
@@ -578,6 +611,18 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
           </div>
         </div>
       )}
+
+      {/* Reusable Category Delete Dialog */}
+      <ConfirmDialog
+        isOpen={catIdToDelete !== null}
+        onClose={() => setCatIdToDelete(null)}
+        onConfirm={confirmDeleteCategory}
+        title="Hapus Kategori?"
+        description="Apakah Anda yakin ingin menghapus kategori ini beserta seluruh gerakan latihan di dalamnya?"
+        type="danger"
+        confirmText="Ya, Hapus"
+        cancelText="Batal"
+      />
     </div>
   )
 }

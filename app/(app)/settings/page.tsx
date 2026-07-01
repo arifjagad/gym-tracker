@@ -51,7 +51,7 @@ export default async function SettingsPage() {
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-body">
+          <div className="grid grid-cols-1 gap-4 text-xs font-body">
             <div className="space-y-1">
               <span className="opacity-55" style={{ color: 'var(--chalk-muted)' }}>Email Terdaftar</span>
               <p className="font-semibold text-sm" style={{ color: 'var(--chalk)' }}>{userEmail}</p>

@@ -27,8 +27,9 @@ export function CreatePlanDialog() {
       const newPlan = await createPlanAction(name)
       setName('')
       setIsOpen(false)
-      // Redirect langsung ke editor untuk mengedit detailnya
-      router.push(`/workout/plans/${newPlan.id}/edit`)
+      const cleanSlug = newPlan.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
+      const shortId = newPlan.id.substring(0, 8)
+      router.push(`/workout/plans/${cleanSlug}-${shortId}/edit`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal membuat template.')
     } finally {
@@ -42,7 +43,7 @@ export function CreatePlanDialog() {
         ref={triggerRef}
         onPointerDown={triggerDown}
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 py-3 px-5 rounded-lg text-xs font-bold tracking-wider font-display uppercase cursor-pointer transition-colors hover:opacity-90"
+        className="w-full flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-xs font-bold tracking-wider font-display uppercase cursor-pointer transition-all active:scale-[0.98] hover:opacity-95"
         style={{
           backgroundColor: 'var(--intensity)',
           color: 'var(--chalk)',

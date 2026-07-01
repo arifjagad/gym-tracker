@@ -114,14 +114,14 @@ export function SearchableSelect({
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-50"
+            className="fixed inset-0 z-[70]"
             style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}
             onClick={() => { setOpen(false); setQuery('') }}
           />
 
           {/* Sheet */}
           <div
-            className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-50 rounded-t-3xl overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-200"
+            className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-[70] rounded-t-3xl overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-200"
             style={{
               backgroundColor: 'var(--surface)',
               borderTop: '1px solid var(--border-strong)',

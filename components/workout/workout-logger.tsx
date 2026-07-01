@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Timer, Dumbbell, Award, ArrowRight } from 'lucide-react'
+import { Timer, Dumbbell, Award, ArrowRight, AlertTriangle } from 'lucide-react'
 import { useTapFeedback } from '@/hooks/use-tap-feedback'
 import { ExerciseLoggerCard } from './exercise-logger-card'
+import { createClient } from '@/lib/supabase/client'
+import { deleteWorkoutSessionAction } from '@/lib/actions/workout'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 interface ExerciseDetail {
   id: string
@@ -42,6 +45,7 @@ interface WorkoutLoggerProps {
 
 export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
   const router = useRouter()
+  const supabase = createClient()
   
   // Deteksi kategori default berdasarkan hari aktif
   const daysMapping = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu']
@@ -53,8 +57,17 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
   const initialTab = categories.find((c) => c.day_of_week === todayDay)?.id || categories[0]?.id || null
   const [activeTabId, setActiveTabId] = useState<string | null>(initialTab)
 
-  // State Timer / Stopwatch Sesi Latihan
   const [seconds, setSeconds] = useState(0)
+  const [isSessionCompleted, setIsSessionCompleted] = useState(false)
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false)
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const completed = localStorage.getItem(`completed_session_${session.id}`) === 'true'
+      setIsSessionCompleted(completed)
+    }
+  }, [session.id])
 
   useEffect(() => {
     // Hitung durasi awal berdasarkan selisih waktu dibuat
@@ -84,12 +97,127 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
 
   const { ref: finishRef, onPointerDown: finishDown } = useTapFeedback()
 
-  // Selesaikan Sesi Latihan
+  // Selesaikan Sesi Latihan - pemicu dialog konfirmasi kustom
   const handleFinishSession = () => {
-    if (!confirm('Apakah Anda yakin ingin menyelesaikan sesi latihan hari ini?')) return
+    setShowFinishConfirm(true)
+  }
+
+  // Aksi eksekusi penyelesaian sesi setelah dikonfirmasi di modal kustom
+  const confirmFinishSession = async () => {
+    setShowFinishConfirm(false)
     
-    // Redirect ke dashboard untuk merayakan penyelesaian
-    router.push('/dashboard')
+    // Cek apakah ada logs yang terisi di session ini
+    const { count, error } = await supabase
+      .from('workout_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('session_id', session.id)
+
+    if (!error && (count === null || count === 0)) {
+      // Jika 0 logs, hapus sesi agar user tidak terkunci pada logger kosong
+      try {
+        await deleteWorkoutSessionAction(session.id)
+        router.push('/workout')
+        router.refresh()
+      } catch (err) {
+        console.error(err)
+      }
+    } else {
+      // Jika ada logs, simpan status selesai
+      localStorage.setItem(`completed_session_${session.id}`, 'true')
+      setIsSessionCompleted(true)
+    }
+  }
+
+  // Aksi eksekusi restart sesi latihan setelah dikonfirmasi
+  const confirmRestartSession = async () => {
+    setShowRestartConfirm(false)
+    try {
+      await deleteWorkoutSessionAction(session.id)
+      localStorage.removeItem(`completed_session_${session.id}`)
+      setIsSessionCompleted(false)
+      router.push('/workout')
+      router.refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal merestart latihan.')
+    }
+  }
+
+  if (isSessionCompleted) {
+    return (
+      <div className="py-12 px-4 max-w-md mx-auto text-center space-y-8 animate-in fade-in zoom-in-95 duration-300">
+        {/* Trophy Animation / Banner */}
+        <div className="relative py-10 px-6 rounded-3xl border shadow-xl overflow-hidden"
+          style={{
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--border-strong)',
+          }}
+        >
+          <div className="absolute inset-0 bg-radial-gradient from-[rgba(76,175,80,0.15)] to-transparent opacity-60 pointer-events-none" />
+          
+          <div className="mx-auto w-20 h-20 rounded-full flex items-center justify-center bg-[rgba(76,175,80,0.12)] border border-[rgba(76,175,80,0.2)] mb-4">
+            <Award className="w-10 h-10" style={{ color: 'var(--progress)' }} />
+          </div>
+
+          <h2 className="font-display text-3xl font-extrabold uppercase tracking-wider text-white">
+            LATIHAN SELESAI!
+          </h2>
+          <p className="font-body text-xs mt-1.5 max-w-xs mx-auto animate-pulse" style={{ color: 'var(--chalk-muted)' }}>
+            Luar biasa! Sesi latihan Anda hari ini telah berhasil direkam ke dalam database.
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="p-4 rounded-2xl border text-center" style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}>
+            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--chalk-muted)' }}>Durasi</p>
+            <p className="font-numeric text-xl font-extrabold text-white mt-1">{formatTime(seconds)}</p>
+          </div>
+          <div className="p-4 rounded-2xl border text-center" style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}>
+            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: 'var(--chalk-muted)' }}>Template</p>
+            <p className="font-display text-xs font-bold uppercase truncate text-white mt-1.5">{planDetails?.name || 'Latihan Bebas'}</p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-3 pt-2">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-display font-bold uppercase tracking-wider text-xs text-white active:scale-[0.98] transition-all cursor-pointer"
+            style={{
+              backgroundColor: 'var(--intensity)',
+              backgroundImage: 'linear-gradient(135deg, var(--intensity), #ff5a3d)',
+            }}
+          >
+            Kembali ke Beranda
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setShowRestartConfirm(true)}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-display font-bold uppercase tracking-wider text-xs active:scale-[0.98] transition-all cursor-pointer"
+            style={{
+              backgroundColor: 'var(--surface-raised)',
+              color: 'var(--chalk-muted)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            Mulai Latihan Baru Hari Ini
+          </button>
+        </div>
+
+        {/* Reusable Restart Confirmation Modal inside summary */}
+        <ConfirmDialog
+          isOpen={showRestartConfirm}
+          onClose={() => setShowRestartConfirm(false)}
+          onConfirm={confirmRestartSession}
+          title="Mulai Ulang Sesi?"
+          description="Ini akan menghapus seluruh catatan latihan hari ini dan memulai sesi baru. Tindakan ini bersifat permanen."
+          type="danger"
+          confirmText="Ya, Mulai Baru"
+          cancelText="Batal"
+        />
+      </div>
+    )
   }
 
   const activeCategory = categories.find((c) => c.id === activeTabId)
@@ -181,6 +309,30 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Reusable Finish Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={showFinishConfirm}
+        onClose={() => setShowFinishConfirm(false)}
+        onConfirm={confirmFinishSession}
+        title="Selesaikan Latihan?"
+        description="Apakah Anda yakin ingin menyelesaikan sesi latihan hari ini?"
+        type="success"
+        confirmText="Ya, Selesai!"
+        cancelText="Batal"
+      />
+
+      {/* Reusable Restart Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={showRestartConfirm}
+        onClose={() => setShowRestartConfirm(false)}
+        onConfirm={confirmRestartSession}
+        title="Mulai Ulang Sesi?"
+        description="Ini akan menghapus seluruh catatan latihan hari ini dan memulai sesi baru. Tindakan ini bersifat permanen."
+        type="danger"
+        confirmText="Ya, Mulai Baru"
+        cancelText="Batal"
+      />
     </div>
   )
 }

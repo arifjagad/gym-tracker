@@ -31,14 +31,17 @@ export default async function PlansPage() {
   }
 
   return (
-    <main className="p-6 max-w-7xl mx-auto space-y-6">
+    <main className="p-6 space-y-6">
       {/* Header Halaman */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="space-y-4">
         <div>
-          <h1 className="font-display text-4xl font-bold tracking-wider" style={{ color: 'var(--chalk)' }}>
+          <p className="text-[10px] font-bold uppercase tracking-[0.25em] font-display mb-1" style={{ color: 'var(--intensity)' }}>
+            Rencana
+          </p>
+          <h1 className="font-display text-3xl font-bold tracking-wider" style={{ color: 'var(--chalk)' }}>
             TEMPLATE LATIHAN
           </h1>
-          <p className="font-body text-xs" style={{ color: 'var(--chalk-muted)' }}>
+          <p className="font-body text-xs mt-1" style={{ color: 'var(--chalk-muted)' }}>
             Susun, edit, dan gunakan template latihan mingguan Anda secara terstruktur.
           </p>
         </div>
@@ -75,7 +78,7 @@ export default async function PlansPage() {
         </div>
       ) : (
         /* Grid Layout */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-4">
           {plans.map((plan) => (
             <PlanCard key={plan.id} plan={plan} />
           ))}

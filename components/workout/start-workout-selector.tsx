@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Play, Calendar, Zap, ChevronRight, Search, X, Check, ChevronDown, Layers, Plus } from 'lucide-react'
+import { Play, Calendar, Zap, ChevronRight, Search, X, Check, ChevronDown, Layers, Plus, Edit2 } from 'lucide-react'
 import { startWorkoutSession } from '@/lib/actions/workout'
 import Link from 'next/link'
 
@@ -212,19 +212,35 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
             </div>
           )}
 
-          <button
-            disabled={loading || !selectedPlan}
-            onClick={() => handleStart(selectedPlan.id)}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-display font-bold uppercase tracking-wider text-xs disabled:opacity-40 active:scale-[0.98] transition-transform"
-            style={{
-              backgroundColor: 'var(--surface-raised)',
-              color: 'var(--chalk)',
-              border: '1px solid var(--border-strong)',
-            }}
-          >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            {loading ? 'Mempersiapkan...' : 'Mulai Template Ini'}
-          </button>
+          <div className="flex gap-2.5 w-full pt-1">
+            {/* Edit Template */}
+            <Link
+              href={`/workout/plans/${selectedPlan.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')}-${selectedPlan.id.substring(0, 8)}/edit`}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-display font-bold uppercase tracking-wider text-xs active:scale-[0.98] transition-all cursor-pointer border"
+              style={{
+                backgroundColor: 'var(--surface-raised)',
+                borderColor: 'var(--border)',
+                color: 'var(--chalk-muted)',
+              }}
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              Edit
+            </Link>
+
+            {/* Mulai Latihan */}
+            <button
+              disabled={loading || selectedPlan.plan_categories.length === 0}
+              onClick={() => handleStart(selectedPlan.id)}
+              className="flex-[2] flex items-center justify-center gap-2 py-3.5 rounded-2xl font-display font-bold uppercase tracking-wider text-xs disabled:opacity-40 active:scale-[0.98] transition-all cursor-pointer text-white"
+              style={{
+                backgroundColor: 'var(--intensity)',
+                backgroundImage: 'linear-gradient(135deg, var(--intensity), #ff5a3d)',
+              }}
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              {loading ? 'Mempersiapkan...' : 'Mulai'}
+            </button>
+          </div>
         </div>
 
         {/* Link ke plans */}
@@ -245,14 +261,14 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 z-50"
+            className="fixed inset-0 z-[70]"
             style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}
             onClick={() => { setSheetOpen(false); setQuery('') }}
           />
 
           {/* Sheet */}
           <div
-            className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-50 rounded-t-3xl overflow-hidden"
+            className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-[70] rounded-t-3xl overflow-hidden"
             style={{
               backgroundColor: 'var(--surface)',
               borderTop: '1px solid var(--border-strong)',
@@ -272,7 +288,7 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
               </p>
               <button
                 onClick={() => { setSheetOpen(false); setQuery('') }}
-                className="p-1.5 rounded-lg active:opacity-70"
+                className="p-1.5 rounded-lg active:opacity-70 cursor-pointer"
                 style={{ color: 'var(--chalk-muted)', backgroundColor: 'var(--surface-raised)' }}
               >
                 <X className="w-4 h-4" />
@@ -296,7 +312,7 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
                   style={{ color: 'var(--chalk)' }}
                 />
                 {query && (
-                  <button onClick={() => setQuery('')} className="active:opacity-70" style={{ color: 'var(--chalk-muted)' }}>
+                  <button onClick={() => setQuery('')} className="active:opacity-70 cursor-pointer" style={{ color: 'var(--chalk-muted)' }}>
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -304,7 +320,7 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
             </div>
 
             {/* List */}
-            <ul className="overflow-y-auto px-3 pb-4" style={{ maxHeight: '45dvh' }}>
+            <ul className="overflow-y-auto px-3 pb-12" style={{ maxHeight: '45dvh' }}>
               {filtered.length === 0 ? (
                 <li className="py-8 text-center text-xs font-body" style={{ color: 'var(--chalk-muted)' }}>
                   Tidak ditemukan &ldquo;{query}&rdquo;
@@ -317,7 +333,7 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
                       <button
                         type="button"
                         onClick={() => selectPlan(plan)}
-                        className="w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl mb-1.5 active:opacity-70 transition-opacity text-left"
+                        className="w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl mb-1.5 active:opacity-70 transition-opacity text-left cursor-pointer"
                         style={{
                           backgroundColor: isSelected ? 'rgba(232,67,44,0.1)' : 'var(--surface-raised)',
                           border: isSelected ? '1px solid rgba(232,67,44,0.3)' : '1px solid transparent',

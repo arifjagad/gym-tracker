@@ -124,9 +124,9 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
       </div>
 
       {/* Detail Latihan & GIF Container */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Info detail (col-span-8) */}
-        <div className="lg:col-span-8 space-y-6">
+      <div className="grid grid-cols-1 gap-6 items-start">
+        {/* Info detail */}
+        <div className="space-y-6">
           <div className="space-y-3">
             <h1 className="font-display text-4xl md:text-5xl font-extrabold uppercase tracking-wide leading-none" style={{ color: 'var(--chalk)' }}>
               {exercise.name}
@@ -172,9 +172,9 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
           )}
         </div>
 
-        {/* GIF Demonstasi (col-span-4) */}
+        {/* GIF Demonstasi */}
         {exercise.gif_url && (
-          <div className="lg:col-span-4 p-5 rounded-xl border space-y-3 flex flex-col items-center text-center" style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}>
+          <div className="p-5 rounded-xl border space-y-3 flex flex-col items-center text-center w-full" style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}>
             <span className="text-[10px] font-bold uppercase tracking-wider opacity-60" style={{ color: 'var(--chalk-muted)' }}>
               Demonstrasi Gerakan
             </span>
