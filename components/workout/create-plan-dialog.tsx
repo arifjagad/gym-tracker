@@ -55,7 +55,7 @@ export function CreatePlanDialog() {
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div
-            className="w-full max-w-md p-6 rounded-xl border space-y-4 relative animate-in fade-in zoom-in-95 duration-150"
+            className="w-full max-w-[390px] p-6 rounded-xl border space-y-4 relative animate-in fade-in zoom-in-95 duration-150"
             style={{
               backgroundColor: 'var(--surface)',
               borderColor: 'var(--border)',

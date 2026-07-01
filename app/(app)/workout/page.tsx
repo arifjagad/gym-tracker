@@ -9,15 +9,13 @@ export const dynamic = 'force-dynamic'
 export default async function WorkoutLoggerPage() {
   const supabase = await createClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
     return (
-      <main className="p-6 text-center" style={{ color: 'var(--chalk-muted)' }}>
-        Memuat data autentikasi...
-      </main>
+      <div className="p-6 text-center text-sm font-body" style={{ color: 'var(--chalk-muted)' }}>
+        Memuat...
+      </div>
     )
   }
 
@@ -39,21 +37,12 @@ export default async function WorkoutLoggerPage() {
       const { data } = await supabase
         .from('plans')
         .select(`
-          id,
-          name,
+          id, name,
           plan_categories (
-            id,
-            category_name,
-            day_of_week,
+            id, category_name, day_of_week,
             plan_exercises (
               exercise_id,
-              exercises (
-                id,
-                name,
-                body_part,
-                target,
-                equipment
-              )
+              exercises ( id, name, body_part, target, equipment )
             )
           )
         `)
@@ -63,79 +52,81 @@ export default async function WorkoutLoggerPage() {
     }
 
     return (
-      <main className="p-6 max-w-4xl mx-auto">
+      <div className="px-4 py-5">
         <WorkoutLogger session={activeSession} planDetails={planDetails as any} />
-      </main>
+      </div>
     )
   }
 
-  // 3. Jika belum ada sesi aktif, muat plans untuk pemilihan awal
+  // 3. Muat plans
   const { data: plans } = await supabase
     .from('plans')
     .select(`
-      id,
-      name,
-      plan_categories (
-        id,
-        category_name,
-        day_of_week
-      )
+      id, name,
+      plan_categories ( id, category_name, day_of_week )
     `)
     .order('created_at', { ascending: false })
 
   const availablePlans = plans || []
 
   return (
-    <main className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header Halaman */}
+    <div className="px-4 py-5 space-y-6">
+
+      {/* ── HEADER ── */}
       <div>
-        <h1 className="font-display text-4xl font-bold tracking-wider" style={{ color: 'var(--chalk)' }}>
-          CATAT WORKOUT
+        <p
+          className="text-[9px] font-bold uppercase tracking-[0.3em] font-display mb-1"
+          style={{ color: 'var(--intensity)' }}
+        >
+          Sesi Latihan
+        </p>
+        <h1
+          className="font-display font-extrabold uppercase tracking-wide text-3xl"
+          style={{ color: 'var(--chalk)' }}
+        >
+          Catat Workout
         </h1>
-        <p className="font-body text-xs" style={{ color: 'var(--chalk-muted)' }}>
-          Mulai dan catat beban serta repetisi latihan Anda hari ini secara presisi.
+        <p className="font-body text-xs mt-1" style={{ color: 'var(--chalk-muted)' }}>
+          Pilih template dan mulai catat setiap set hari ini.
         </p>
       </div>
 
       {availablePlans.length === 0 ? (
-        /* Empty State: Belum buat template plans */
+        /* ── EMPTY STATE ── */
         <div
-          className="p-16 rounded-xl border flex flex-col items-center justify-center text-center space-y-4"
-          style={{
-            backgroundColor: 'var(--surface)',
-            borderColor: 'var(--border)',
-          }}
+          className="rounded-2xl p-10 flex flex-col items-center text-center gap-5"
+          style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}
         >
           <div
-            className="p-4 rounded-full flex items-center justify-center inline-flex"
+            className="w-16 h-16 rounded-2xl flex items-center justify-center"
             style={{ backgroundColor: 'var(--surface-raised)' }}
           >
-            <Dumbbell className="w-8 h-8" style={{ color: 'var(--chalk-muted)' }} />
+            <Dumbbell className="w-7 h-7" style={{ color: 'var(--chalk-muted)' }} />
           </div>
-          <div className="space-y-1">
-            <h3 className="font-display text-xl font-bold uppercase tracking-wider" style={{ color: 'var(--chalk)' }}>
-              Belum Ada Template Latihan
+          <div className="space-y-1.5">
+            <h3 className="font-display font-bold uppercase tracking-wide text-base" style={{ color: 'var(--chalk)' }}>
+              Belum Ada Template
             </h3>
-            <p className="font-body text-xs max-w-sm mx-auto" style={{ color: 'var(--chalk-muted)' }}>
-              Anda harus membuat template rencana latihan (*workout plans*) terlebih dahulu sebelum mulai mencatat latihan.
+            <p className="font-body text-xs max-w-xs leading-relaxed" style={{ color: 'var(--chalk-muted)' }}>
+              Buat template rencana latihan terlebih dahulu sebelum mulai mencatat sesi gym Anda.
             </p>
           </div>
           <Link
             href="/workout/plans"
-            className="flex items-center gap-2 py-3 px-5 rounded-lg text-xs font-bold tracking-wider font-display uppercase cursor-pointer"
+            className="inline-flex items-center gap-2 py-3.5 px-6 rounded-2xl text-xs font-display font-bold uppercase tracking-wider active:scale-[0.97] transition-transform"
             style={{
-              backgroundColor: 'var(--intensity)',
-              color: 'var(--chalk)',
+              background: 'linear-gradient(135deg, var(--intensity), #ff6b4a)',
+              color: '#fff',
+              boxShadow: '0 4px 20px rgba(232,67,44,0.3)',
             }}
           >
-            <Plus className="w-4 h-4" />
-            Buat Template Latihan
+            <Plus className="w-3.5 h-3.5" />
+            Buat Template
           </Link>
         </div>
       ) : (
-        /* Pemilih Plan Untuk Memulai Sesi */
         <StartWorkoutSelector plans={availablePlans as any[]} />
       )}
-    </main>
+    </div>
   )
 }

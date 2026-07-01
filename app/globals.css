@@ -98,10 +98,18 @@ body {
   background: var(--chalk-muted);
 }
 
-/* --- Focus visible — chalk outline instead of browser default --- */
-:focus-visible {
+/* --- Focus visible — chalk outline instead of browser default (except input, select, textarea) --- */
+:focus-visible:not(input):not(select):not(textarea) {
   outline: 2px solid var(--chalk-muted);
   outline-offset: 2px;
+}
+
+input:focus, select:focus, textarea:focus,
+.select2-container--default .select2-selection--single:focus,
+.select2-container--default.select2-container--focus .select2-selection--single,
+.select2-selection__rendered:focus {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* --- Utility classes for font roles --- */
@@ -116,4 +124,10 @@ body {
 
 .font-body {
   font-family: var(--font-body);
+}
+
+/* --- Skeleton shimmer animation for loading states --- */
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }

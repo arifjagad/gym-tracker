@@ -39,7 +39,17 @@ export default function RootLayout({
       lang="id"
       className={`${oswald.variable} ${jetbrainsMono.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-dvh flex flex-col">{children}</body>
+      <body className="min-h-dvh flex flex-col bg-[#020202]">
+        <div 
+          className="w-full max-w-[430px] mx-auto min-h-dvh flex flex-col relative shadow-[0_0_60px_rgba(0,0,0,0.85)] border-x"
+          style={{ 
+            backgroundColor: 'var(--bg-base)', 
+            borderColor: 'var(--border)' 
+          }}
+        >
+          {children}
+        </div>
+      </body>
     </html>
   );
 }

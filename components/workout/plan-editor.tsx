@@ -454,7 +454,7 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
       {isCatalogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div
-            className="w-full max-w-xl p-6 rounded-xl border space-y-4 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85dvh]"
+            className="w-full max-w-[390px] p-6 rounded-xl border space-y-4 relative animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85dvh]"
             style={{
               backgroundColor: 'var(--surface)',
               borderColor: 'var(--border)',

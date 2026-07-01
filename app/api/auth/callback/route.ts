@@ -18,14 +18,23 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (!error) {
+      // Get the correct public origin from forwarding headers (ngrok/proxy)
+      const forwardedHost = request.headers.get('x-forwarded-host')
+      const forwardedProto = request.headers.get('x-forwarded-proto') || 'http'
+      const origin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : requestUrl.origin
+      
       // Login sukses, redirect ke halaman dashboard/tujuan
-      return NextResponse.redirect(new URL(next, request.url))
+      return NextResponse.redirect(new URL(next, origin))
     }
     
     // Log error jika ada masalah pertukaran token
     console.error('Callback OAuth error:', error.message)
   }
 
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'http'
+  const origin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : requestUrl.origin
+
   // Jika gagal atau tidak ada code, lempar balik ke login page dengan status error
-  return NextResponse.redirect(new URL('/login?error=auth-callback-failed', request.url))
+  return NextResponse.redirect(new URL('/login?error=auth-callback-failed', origin))
 }

@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Play, Calendar, Dumbbell, ArrowRight } from 'lucide-react'
-import { useTapFeedback } from '@/hooks/use-tap-feedback'
+import { Play, Calendar, Zap, ChevronRight, Search, X, Check, ChevronDown, Layers, Plus } from 'lucide-react'
 import { startWorkoutSession } from '@/lib/actions/workout'
+import Link from 'next/link'
 
 interface CategoryItem {
   id: string
@@ -26,32 +26,40 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
 
-  // Deteksi Hari Ini
+  // Deteksi hari ini
   const daysMapping = ['minggu', 'senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu']
-  const todayDay = daysMapping[new Date().getDay()]
+  const todayDay   = daysMapping[new Date().getDay()]
   const todayLabel = new Date().toLocaleDateString('id-ID', { weekday: 'long' })
 
-  // Cari rekomendasi jadwal latihan hari ini
+  // Rekomendasi hari ini
   let suggestedPlan: PlanItem | null = null
   let suggestedCategory: CategoryItem | null = null
-
   for (const plan of plans) {
     const matchedCat = plan.plan_categories.find((c) => c.day_of_week === todayDay)
-    if (matchedCat) {
-      suggestedPlan = plan
-      suggestedCategory = matchedCat
-      break
-    }
+    if (matchedCat) { suggestedPlan = plan; suggestedCategory = matchedCat; break }
   }
 
-  // State Pilihan Latihan Manual
-  const [selectedPlanId, setSelectedPlanId] = useState<string>(
-    suggestedPlan?.id || plans[0]?.id || ''
+  const [selectedPlan, setSelectedPlan] = useState<PlanItem>(
+    suggestedPlan || plans[0]
   )
 
-  const { ref: startRef, onPointerDown: startDown } = useTapFeedback()
-  const { ref: quickRef, onPointerDown: quickDown } = useTapFeedback()
+  const filtered = query.trim()
+    ? plans.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
+    : plans
+
+  useEffect(() => {
+    if (sheetOpen) setTimeout(() => searchRef.current?.focus(), 100)
+  }, [sheetOpen])
+
+  // Prevent body scroll when sheet open
+  useEffect(() => {
+    document.body.style.overflow = sheetOpen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [sheetOpen])
 
   const handleStart = async (planId: string) => {
     if (!planId) return
@@ -59,7 +67,6 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
     setError(null)
     try {
       await startWorkoutSession(planId)
-      // Refresh router untuk memuat state sesi aktif
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal memulai latihan.')
@@ -67,119 +74,276 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
     }
   }
 
+  const selectPlan = (plan: PlanItem) => {
+    setSelectedPlan(plan)
+    setSheetOpen(false)
+    setQuery('')
+  }
+
   return (
-    <div className="max-w-xl mx-auto space-y-6">
-      {/* 1. KOTAK REKOMENDASI HARI INI */}
-      {suggestedPlan && suggestedCategory ? (
+    <>
+      <div className="space-y-4">
+
+        {/* ── REKOMENDASI HARI INI ── */}
+        {suggestedPlan && suggestedCategory && (
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={{ border: '1px solid rgba(232,67,44,0.3)', backgroundColor: 'var(--surface)' }}
+          >
+            <div className="h-1" style={{ background: 'linear-gradient(90deg, var(--intensity), #ff6b4a)' }} />
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <span
+                  className="inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest font-display"
+                  style={{ color: 'var(--intensity)' }}
+                >
+                  <Calendar className="w-3 h-3" />
+                  Jadwal Hari {todayLabel}
+                </span>
+                <div
+                  className="w-8 h-8 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: 'rgba(232,67,44,0.1)' }}
+                >
+                  <Zap className="w-4 h-4" style={{ color: 'var(--intensity)' }} />
+                </div>
+              </div>
+
+              <div>
+                <h2
+                  className="font-display font-extrabold uppercase tracking-wide text-2xl"
+                  style={{ color: 'var(--chalk)' }}
+                >
+                  {suggestedCategory.category_name}
+                </h2>
+                <p className="text-[10px] font-body mt-0.5" style={{ color: 'var(--chalk-muted)' }}>
+                  {suggestedPlan.name}
+                </p>
+              </div>
+
+              {error && (
+                <div
+                  className="p-3 rounded-xl text-xs font-body"
+                  style={{ backgroundColor: 'rgba(232,67,44,0.08)', color: 'var(--intensity)', border: '1px solid rgba(232,67,44,0.15)' }}
+                >
+                  {error}
+                </div>
+              )}
+
+              <button
+                disabled={loading}
+                onClick={() => handleStart(suggestedPlan!.id)}
+                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl font-display font-bold uppercase tracking-wider text-sm disabled:opacity-50 active:scale-[0.98] transition-transform"
+                style={{
+                  background: 'linear-gradient(135deg, var(--intensity), #ff6b4a)',
+                  color: '#fff',
+                  boxShadow: '0 6px 24px rgba(232,67,44,0.35)',
+                }}
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} />
+                    Mempersiapkan...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-current" />
+                    Mulai Sekarang
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── PILIH TEMPLATE LAIN ── */}
         <div
-          className="p-6 rounded-xl border space-y-4 relative overflow-hidden"
-          style={{
-            backgroundColor: 'var(--surface)',
-            borderColor: 'var(--intensity)', // Highlight aksen merah
-          }}
+          className="rounded-2xl p-5 space-y-4"
+          style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}
         >
-          {/* Tag Rekomendasi */}
-          <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase font-body" style={{ color: 'var(--intensity)' }}>
-            <Calendar className="w-3.5 h-3.5" />
-            Rekomendasi Latihan Hari {todayLabel}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--surface-raised)' }}>
+              <Layers className="w-4 h-4" style={{ color: 'var(--chalk-muted)' }} />
+            </div>
+            <div>
+              <p className="text-xs font-display font-bold uppercase tracking-wider" style={{ color: 'var(--chalk)' }}>
+                Template Lain
+              </p>
+              <p className="text-[10px] font-body" style={{ color: 'var(--chalk-muted)' }}>
+                Pilih rencana latihan
+              </p>
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <h3 className="font-display text-2xl font-bold uppercase tracking-wider" style={{ color: 'var(--chalk)' }}>
-              {suggestedCategory.category_name}
-            </h3>
-            <p className="font-body text-xs" style={{ color: 'var(--chalk-muted)' }}>
-              Template: {suggestedPlan.name}
-            </p>
-          </div>
+          {/* Trigger button — buka bottom sheet */}
+          <button
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            disabled={loading}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-xl active:opacity-70 transition-opacity"
+            style={{
+              backgroundColor: 'var(--surface-raised)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--chalk)',
+            }}
+          >
+            <div className="text-left min-w-0">
+              <p className="text-sm font-medium font-body truncate">{selectedPlan.name}</p>
+              <p className="text-[10px] font-body mt-0.5" style={{ color: 'var(--chalk-muted)' }}>
+                {selectedPlan.plan_categories.length} kategori
+              </p>
+            </div>
+            <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--chalk-muted)' }} />
+          </button>
 
-          {error && (
-            <div className="p-3 rounded text-xs font-body" style={{ backgroundColor: 'rgba(232, 67, 44, 0.1)', color: 'var(--intensity)' }}>
-              {error}
+          {/* Category pills */}
+          {selectedPlan.plan_categories.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {selectedPlan.plan_categories.map((cat) => (
+                <span
+                  key={cat.id}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-body"
+                  style={{ backgroundColor: 'var(--surface-raised)', color: 'var(--chalk-muted)', border: '1px solid var(--border)' }}
+                >
+                  {cat.category_name}
+                  {cat.day_of_week && <span className="opacity-40">· {cat.day_of_week}</span>}
+                </span>
+              ))}
             </div>
           )}
 
           <button
-            ref={quickRef}
-            onPointerDown={quickDown}
-            disabled={loading}
-            onClick={() => handleStart(suggestedPlan!.id)}
-            className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-lg text-xs font-bold tracking-wider font-display uppercase cursor-pointer disabled:opacity-50"
-            style={{
-              backgroundColor: 'var(--intensity)',
-              color: 'var(--chalk)',
-            }}
-          >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            {loading ? 'Mempersiapkan...' : 'Mulai Latihan Sekarang'}
-            <ArrowRight className="w-3.5 h-3.5 ml-1" />
-          </button>
-        </div>
-      ) : null}
-
-      {/* 2. KELOLA MANUAL PILIHAN TEMPLATE */}
-      <div
-        className="p-6 rounded-xl border space-y-4"
-        style={{
-          backgroundColor: 'var(--surface)',
-          borderColor: 'var(--border)',
-        }}
-      >
-        <div className="space-y-1">
-          <h3 className="font-display text-xl font-bold uppercase tracking-wider" style={{ color: 'var(--chalk)' }}>
-            Pilih Template Latihan
-          </h3>
-          <p className="font-body text-xs" style={{ color: 'var(--chalk-muted)' }}>
-            Mulai latihan secara manual menggunakan salah satu template yang telah Anda buat.
-          </p>
-        </div>
-
-        {error && !suggestedPlan && (
-          <div className="p-3 rounded text-xs font-body" style={{ backgroundColor: 'rgba(232, 67, 44, 0.1)', color: 'var(--intensity)' }}>
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--chalk-muted)' }}>
-              Pilih Rencana Latihan
-            </label>
-            <select
-              value={selectedPlanId}
-              onChange={(e) => setSelectedPlanId(e.target.value)}
-              className="block w-full py-2.5 px-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-[--chalk-muted] text-sm font-body"
-              style={{
-                backgroundColor: 'var(--surface-raised)',
-                borderColor: 'var(--border)',
-                color: 'var(--chalk)',
-              }}
-            >
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name} ({plan.plan_categories.length} Kategori)
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            ref={startRef}
-            onPointerDown={startDown}
-            disabled={loading || !selectedPlanId}
-            onClick={() => handleStart(selectedPlanId)}
-            className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-lg text-xs font-bold tracking-wider font-display uppercase cursor-pointer disabled:opacity-50"
+            disabled={loading || !selectedPlan}
+            onClick={() => handleStart(selectedPlan.id)}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-display font-bold uppercase tracking-wider text-xs disabled:opacity-40 active:scale-[0.98] transition-transform"
             style={{
               backgroundColor: 'var(--surface-raised)',
-              borderColor: 'var(--border)',
               color: 'var(--chalk)',
+              border: '1px solid var(--border-strong)',
             }}
           >
             <Play className="w-3.5 h-3.5 fill-current" />
-            {loading ? 'Mempersiapkan...' : 'Mulai Latihan Pilihan'}
+            {loading ? 'Mempersiapkan...' : 'Mulai Template Ini'}
           </button>
         </div>
+
+        {/* Link ke plans */}
+        <Link
+          href="/workout/plans"
+          className="flex items-center justify-center gap-2 py-3 rounded-2xl text-[10px] font-display font-bold uppercase tracking-wider active:opacity-70 transition-opacity"
+          style={{ color: 'var(--chalk-muted)', border: '1px dashed var(--border-strong)' }}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Buat Template Baru
+        </Link>
       </div>
-    </div>
+
+      {/* ═══════════════════════════════════════
+          BOTTOM SHEET — Plan Picker
+      ═══════════════════════════════════════ */}
+      {sheetOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-50"
+            style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}
+            onClick={() => { setSheetOpen(false); setQuery('') }}
+          />
+
+          {/* Sheet */}
+          <div
+            className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-50 rounded-t-3xl overflow-hidden"
+            style={{
+              backgroundColor: 'var(--surface)',
+              borderTop: '1px solid var(--border-strong)',
+              maxHeight: '75dvh',
+              paddingBottom: 'env(safe-area-inset-bottom)',
+            }}
+          >
+            {/* Handle bar */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 rounded-full" style={{ backgroundColor: 'var(--border-strong)' }} />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pb-3">
+              <p className="font-display font-bold uppercase tracking-wider text-sm" style={{ color: 'var(--chalk)' }}>
+                Pilih Template
+              </p>
+              <button
+                onClick={() => { setSheetOpen(false); setQuery('') }}
+                className="p-1.5 rounded-lg active:opacity-70"
+                style={{ color: 'var(--chalk-muted)', backgroundColor: 'var(--surface-raised)' }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search bar */}
+            <div className="px-4 pb-3">
+              <div
+                className="flex items-center gap-2.5 px-3.5 py-3 rounded-xl"
+                style={{ backgroundColor: 'var(--surface-raised)', border: '1px solid var(--border-strong)' }}
+              >
+                <Search className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--chalk-muted)' }} />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Cari nama template..."
+                  className="flex-1 bg-transparent text-sm font-body focus:outline-none"
+                  style={{ color: 'var(--chalk)' }}
+                />
+                {query && (
+                  <button onClick={() => setQuery('')} className="active:opacity-70" style={{ color: 'var(--chalk-muted)' }}>
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* List */}
+            <ul className="overflow-y-auto px-3 pb-4" style={{ maxHeight: '45dvh' }}>
+              {filtered.length === 0 ? (
+                <li className="py-8 text-center text-xs font-body" style={{ color: 'var(--chalk-muted)' }}>
+                  Tidak ditemukan &ldquo;{query}&rdquo;
+                </li>
+              ) : (
+                filtered.map((plan) => {
+                  const isSelected = plan.id === selectedPlan?.id
+                  return (
+                    <li key={plan.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectPlan(plan)}
+                        className="w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl mb-1.5 active:opacity-70 transition-opacity text-left"
+                        style={{
+                          backgroundColor: isSelected ? 'rgba(232,67,44,0.1)' : 'var(--surface-raised)',
+                          border: isSelected ? '1px solid rgba(232,67,44,0.3)' : '1px solid transparent',
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <p
+                            className="text-sm font-medium font-body truncate"
+                            style={{ color: isSelected ? 'var(--intensity)' : 'var(--chalk)' }}
+                          >
+                            {plan.name}
+                          </p>
+                          <p className="text-[10px] font-body mt-0.5" style={{ color: 'var(--chalk-muted)' }}>
+                            {plan.plan_categories.length} kategori
+                          </p>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--intensity)' }} />}
+                      </button>
+                    </li>
+                  )
+                })
+              )}
+            </ul>
+          </div>
+        </>
+      )}
+    </>
   )
 }

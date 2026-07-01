@@ -5,6 +5,19 @@ import { createClient } from '@/lib/supabase/client'
 import { Dumbbell, Trophy, Calendar, Target, HelpCircle, Check, Play, Pause, ChevronDown, X, Zap, BarChart2, Database, TrendingUp, Users, Flame } from 'lucide-react'
 import anime from 'animejs'
 
+/**
+ * Mengkonversi URL gif dari WorkoutX API ke URL raw GitHub yang bersih dan bebas watermark.
+ * Contoh: https://api.workoutxapp.com/v1/gifs/0001.gif → https://raw.githubusercontent.com/.../0001.gif
+ * Ini menghilangkan kebutuhan proxy server-side sehingga GIF langsung dari CDN GitHub.
+ */
+function getCleanGifUrl(workoutxGifUrl: string): string {
+  if (!workoutxGifUrl) return ''
+  const parts = workoutxGifUrl.split('/')
+  const lastPart = parts[parts.length - 1]
+  const id = lastPart.replace('.gif', '').padStart(4, '0')
+  return `https://raw.githubusercontent.com/omercotkd/exercises-gifs/main/assets/${id}.gif`
+}
+
 // ============================================================
 // POPULAR EXERCISES SAMPLE FOR LANDING EXPLORER (Client-side)
 // ============================================================
@@ -247,6 +260,73 @@ export function ChalkBurstWidget() {
 
 
 
+/**
+ * Komponen GIF preview dengan skeleton shimmer saat loading.
+ * Langsung menggunakan raw.githubusercontent.com (GitHub CDN publik) — tanpa proxy server —
+ * sehingga gambar muncul secepatnya dengan 1 hop jaringan saja.
+ */
+function GifPreview({ gifUrl, name }: { gifUrl: string; name: string }) {
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+  const cleanUrl = getCleanGifUrl(gifUrl)
+
+  return (
+    <div
+      className="w-full rounded-xl overflow-hidden relative"
+      style={{ aspectRatio: '1 / 1' }}
+    >
+      {/* Skeleton shimmer — tampil selama GIF belum dimuat */}
+      {!loaded && !error && (
+        <div className="absolute inset-0">
+          <div
+            className="w-full h-full"
+            style={{
+              background: 'linear-gradient(90deg, #111 25%, #1c1c1c 50%, #111 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'skeleton-shimmer 1.4s infinite linear',
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div
+              className="w-8 h-8 rounded-full border-2 animate-spin"
+              style={{ borderColor: 'rgba(232,67,44,0.3)', borderTopColor: 'var(--intensity)' }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* GIF — mengisi penuh container persegi, tanpa ruang hitam sisa */}
+      {!error && (
+        <img
+          src={cleanUrl}
+          alt={name}
+          loading="eager"
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+          className="w-full h-full object-cover transition-opacity duration-500"
+          style={{
+            opacity: loaded ? 1 : 0,
+            filter: 'invert(0.88) hue-rotate(180deg) brightness(1.15) contrast(1.05)',
+          }}
+        />
+      )}
+
+      {/* Fallback jika GitHub CDN tidak tersedia */}
+      {error && (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+          style={{ backgroundColor: 'var(--surface-raised)' }}
+        >
+          <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(232,67,44,0.1)', border: '1px solid rgba(232,67,44,0.2)' }}>
+            <span className="text-xl">🏋️</span>
+          </div>
+          <span className="text-[10px] font-body" style={{ color: 'var(--chalk-muted)' }}>Preview tidak tersedia</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ExerciseModal({ exercise, onClose }: { exercise: SampleExercise; onClose: () => void }) {
   const modalRef = useRef<HTMLDivElement>(null)
 
@@ -278,7 +358,7 @@ function ExerciseModal({ exercise, onClose }: { exercise: SampleExercise; onClos
     >
       <div
         ref={modalRef}
-        className="relative w-full max-w-lg rounded-2xl border overflow-hidden flex flex-col"
+        className="relative w-full max-w-[390px] rounded-2xl border overflow-hidden flex flex-col"
         style={{
           backgroundColor: 'var(--surface)',
           borderColor: 'var(--border)',
@@ -291,19 +371,25 @@ function ExerciseModal({ exercise, onClose }: { exercise: SampleExercise; onClos
 
         {/* Modal Header */}
         <div className="flex items-start justify-between p-5 border-b" style={{ borderColor: 'var(--border)' }}>
-          <div className="space-y-1.5 flex-1 pr-4">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[9px] font-body uppercase tracking-wider px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--surface-raised)', color: 'var(--chalk-muted)' }}>
+          <div className="space-y-2 flex-1 pr-4">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span
+                className="text-[9px] font-body uppercase tracking-wider px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: 'rgba(232,67,44,0.12)', color: 'var(--intensity)', border: '1px solid rgba(232,67,44,0.2)' }}
+              >
+                {exercise.bodyPart}
+              </span>
+              <span className="text-[9px] font-body uppercase tracking-wider px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--surface-raised)', color: 'var(--chalk-muted)' }}>
                 {exercise.equipment}
               </span>
             </div>
-            <h3 className="font-display text-lg font-extrabold uppercase tracking-wider leading-tight" style={{ color: 'var(--chalk)' }}>
+            <h3 className="font-display text-base font-extrabold uppercase tracking-wide leading-tight" style={{ color: 'var(--chalk)' }}>
               {exercise.name}
             </h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg transition-colors hover:bg-[--surface-raised] cursor-pointer flex-shrink-0"
+            className="p-1.5 rounded-lg transition-colors cursor-pointer flex-shrink-0"
             style={{ color: 'var(--chalk-muted)' }}
           >
             <X className="w-4 h-4" />
@@ -311,43 +397,20 @@ function ExerciseModal({ exercise, onClose }: { exercise: SampleExercise; onClos
         </div>
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
           {/* GIF Preview */}
           {exercise.gifUrl && (
-            <div
-              className="w-full h-52 rounded-xl border flex items-center justify-center overflow-hidden p-2"
-              style={{ backgroundColor: '#0A0A0A', borderColor: 'var(--border)' }}
-            >
-              <img
-                src={`/api/exercises/gif?url=${encodeURIComponent(exercise.gifUrl)}`}
-                alt={exercise.name}
-                className="max-h-full max-w-full object-contain opacity-95"
-                style={{ filter: 'invert(0.9) hue-rotate(180deg) brightness(1.2)' }}
-              />
-            </div>
+            <GifPreview gifUrl={exercise.gifUrl} name={exercise.name} />
           )}
 
-          {/* Description */}
-          <p className="font-body text-xs leading-relaxed" style={{ color: 'var(--chalk-muted)' }}>
-            {exercise.description}
-          </p>
-
-          {/* Muscles */}
-          <div className="space-y-2.5">
-            <div className="flex items-center gap-2">
+          {/* Target muscle info row */}
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl" style={{ backgroundColor: 'var(--surface-raised)' }}>
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(232,67,44,0.15)' }}>
               <Target className="w-3.5 h-3.5" style={{ color: 'var(--intensity)' }} />
-              <span className="text-[10px] font-bold font-display uppercase tracking-wider" style={{ color: 'var(--chalk)' }}>Otot Target</span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="px-2 py-1 rounded text-[9px] font-bold font-body uppercase tracking-wider flex items-center gap-1" style={{ backgroundColor: 'rgba(232,67,44,0.1)', color: 'var(--intensity)' }}>
-                <Zap className="w-2.5 h-2.5" />
-                {exercise.target}
-              </span>
-              {exercise.secondaryMuscles.map((m, i) => (
-                <span key={i} className="px-2 py-1 rounded text-[9px] font-body uppercase tracking-wider" style={{ backgroundColor: 'var(--surface-raised)', color: 'var(--chalk-muted)' }}>
-                  {m}
-                </span>
-              ))}
+            <div>
+              <p className="text-[9px] font-body uppercase tracking-wider mb-0.5" style={{ color: 'var(--chalk-muted)' }}>Otot Target</p>
+              <p className="text-xs font-bold font-display uppercase tracking-wide" style={{ color: 'var(--chalk)' }}>{exercise.target}</p>
             </div>
           </div>
 
@@ -375,12 +438,14 @@ function ExerciseModal({ exercise, onClose }: { exercise: SampleExercise; onClos
 
         {/* Footer CTA */}
         <div className="p-4 border-t" style={{ borderColor: 'var(--border)' }}>
-          <p className="text-center text-[9px] font-body" style={{ color: 'var(--chalk-muted)' }}>
-            Login untuk melihat demo GIF, progress chart, & catat latihan ini →{' '}
-            <a href="/login" className="font-bold underline underline-offset-2" style={{ color: 'var(--intensity)' }}>
-              Mulai Gratis
-            </a>
-          </p>
+          <a
+            href="/login"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-display font-bold text-xs uppercase tracking-wider transition-opacity hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg, var(--intensity), #ff6b4a)', color: '#fff' }}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            Catat Latihan Ini — Gratis
+          </a>
         </div>
       </div>
     </div>
@@ -394,6 +459,51 @@ export function MiniCatalogWidget() {
   const [exercises, setExercises] = useState<any[]>([])
   const [activeExercise, setActiveExercise] = useState<SampleExercise | null>(null)
   const [loading, setLoading] = useState(true)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Click and drag horizontal scroll handler for desktop mouse users
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    let isDown = false
+    let startX: number
+    let scrollLeft: number
+
+    const handleMouseDown = (e: MouseEvent) => {
+      isDown = true
+      startX = e.pageX - el.offsetLeft
+      scrollLeft = el.scrollLeft
+    }
+
+    const handleMouseLeave = () => {
+      isDown = false
+    }
+
+    const handleMouseUp = () => {
+      isDown = false
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDown) return
+      e.preventDefault()
+      const x = e.pageX - el.offsetLeft
+      const walk = (x - startX) * 1.5 // Scroll multiplier
+      el.scrollLeft = scrollLeft - walk
+    }
+
+    el.addEventListener('mousedown', handleMouseDown)
+    el.addEventListener('mouseleave', handleMouseLeave)
+    el.addEventListener('mouseup', handleMouseUp)
+    el.addEventListener('mousemove', handleMouseMove)
+
+    return () => {
+      el.removeEventListener('mousedown', handleMouseDown)
+      el.removeEventListener('mouseleave', handleMouseLeave)
+      el.removeEventListener('mouseup', handleMouseUp)
+      el.removeEventListener('mousemove', handleMouseMove)
+    }
+  }, [])
 
   // 1. Fetch categories from database
   useEffect(() => {
@@ -463,12 +573,12 @@ export function MiniCatalogWidget() {
   const getMappedExercise = (dbEx: any): SampleExercise => {
     return {
       name: dbEx.name,
-      bodyPart: dbEx.body_part || 'Lainnya',
+      bodyPart: dbEx.body_part || 'Other',
       target: dbEx.target || 'N/A',
-      equipment: dbEx.equipment || 'Berat Badan',
+      equipment: dbEx.equipment || 'Body Weight',
       instructions: dbEx.instructions || [],
-      secondaryMuscles: [dbEx.target || 'Core'],
-      description: `Gerakan pilihan terbaik untuk melatih otot ${dbEx.target || 'tubuh'} secara terfokus menggunakan ${dbEx.equipment || 'berat badan'}.`,
+      secondaryMuscles: [],
+      description: '',
       gifUrl: dbEx.gif_url || ''
     }
   }
@@ -489,16 +599,40 @@ export function MiniCatalogWidget() {
         </div>
 
         {/* Filters & Search Row */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          {/* Categories Tab selector */}
-          <div className="flex flex-wrap gap-1.5">
+        <div className="space-y-4 w-full">
+          {/* Search Input */}
+          <div className="w-full">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari gerakan (contoh: Bench, Squat)..."
+              className="block w-full py-3 px-4 border rounded-xl focus:outline-none focus:ring-1 focus:ring-[--intensity] text-xs font-body transition-colors"
+              style={{
+                backgroundColor: 'var(--surface-raised)',
+                borderColor: 'var(--border)',
+                color: 'var(--chalk)',
+              }}
+            />
+          </div>
+
+          {/* Categories Tab selector (horizontal scrollable) */}
+          <div 
+            ref={scrollRef}
+            className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-none select-none"
+            style={{ 
+              scrollbarWidth: 'none', 
+              WebkitOverflowScrolling: 'touch',
+              cursor: 'grab'
+            }}
+          >
             {categories.map((cat) => {
               const isActive = selectedCategory === cat
               return (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className="px-3 py-1.5 rounded text-[9px] uppercase font-bold tracking-widest font-display transition-all cursor-pointer border"
+                  className="px-3.5 py-1.5 rounded-lg text-[9px] uppercase font-bold tracking-widest font-display transition-all cursor-pointer border flex-shrink-0"
                   style={{
                     backgroundColor: isActive ? 'var(--intensity)' : 'var(--surface-raised)',
                     borderColor: isActive ? 'var(--intensity)' : 'var(--border)',
@@ -510,26 +644,10 @@ export function MiniCatalogWidget() {
               )
             })}
           </div>
-
-          {/* Search Input */}
-          <div className="w-full md:max-w-xs">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari gerakan (contoh: Bench, Squat)..."
-              className="block w-full py-2.5 px-4 border rounded-lg focus:outline-none focus:ring-1 focus:ring-[--intensity] text-xs font-body transition-colors"
-              style={{
-                backgroundColor: 'var(--surface-raised)',
-                borderColor: 'var(--border)',
-                color: 'var(--chalk)',
-              }}
-            />
-          </div>
         </div>
 
-        {/* Search Result - 4-column Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Search Result - Clean 2-column Grid for Mobile */}
+        <div className="grid grid-cols-2 gap-3 w-full">
           {loading ? (
             <div className="col-span-full text-center py-12 text-xs font-body" style={{ color: 'var(--chalk-muted)' }}>
               Memuat data gerakan...
@@ -567,13 +685,19 @@ export function MiniCatalogWidget() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      <span className="px-1.5 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider font-body flex items-center gap-0.5 bg-[rgba(232,67,44,0.06)] text-[--intensity]">
-                        <Target className="w-2.5 h-2.5" />
-                        {mappedEx.target}
+                  <div className="space-y-2 w-full">
+                    <div className="flex flex-col items-start gap-1.5 w-full">
+                      <span 
+                        className="px-2 py-1 rounded text-[7.5px] uppercase font-bold tracking-wider font-body flex items-center gap-1 bg-[rgba(232,67,44,0.06)] text-[--intensity] w-auto max-w-full truncate"
+                        title={mappedEx.target}
+                      >
+                        <Target className="w-2.5 h-2.5 flex-shrink-0" />
+                        <span className="truncate">{mappedEx.target}</span>
                       </span>
-                      <span className="px-1.5 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider font-body bg-[rgba(237,233,221,0.06)] text-[--chalk-muted]">
+                      <span 
+                        className="px-2 py-1 rounded text-[7.5px] uppercase font-bold tracking-wider font-body bg-[rgba(237,233,221,0.06)] text-[--chalk-muted] w-auto max-w-full truncate"
+                        title={mappedEx.equipment}
+                      >
                         {mappedEx.equipment}
                       </span>
                     </div>
@@ -612,10 +736,10 @@ export function ConsistencyShowcaseWidget() {
 
   return (
     <div
-      className="p-6 rounded-xl border flex flex-col md:flex-row items-center justify-between gap-6 max-w-4xl w-full h-full"
+      className="p-5 rounded-xl border flex flex-col gap-4 w-full"
       style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
     >
-      <div className="space-y-2 flex-1 text-left">
+      <div className="space-y-1 text-left">
         <h4 className="font-display text-xl font-bold uppercase tracking-wider" style={{ color: 'var(--chalk)' }}>
           STREAK & CONSISTENCY
         </h4>
@@ -669,32 +793,46 @@ export function PremiumFAQWidget() {
   const answerRefs = useRef<(HTMLDivElement | null)[]>([])
 
   const toggleFAQ = (idx: number) => {
+    const prevIdx = openIdx
     const nextIdx = openIdx === idx ? null : idx
     setOpenIdx(nextIdx)
 
-    FAQ_ITEMS.forEach((_, i) => {
-      const el = answerRefs.current[i]
-      if (!el) return
+    // Tutup item yang sebelumnya terbuka
+    if (prevIdx !== null) {
+      const prevEl = answerRefs.current[prevIdx]
+      if (prevEl) {
+        // Ambil tinggi pixel aktual sebelum animasi, agar anime punya titik awal yang valid
+        const currentHeight = prevEl.offsetHeight
+        prevEl.style.height = currentHeight + 'px'
+        anime({
+          targets: prevEl,
+          height: [currentHeight, 0],
+          opacity: [1, 0],
+          duration: 220,
+          easing: 'easeInOutQuad',
+        })
+      }
+    }
 
-      const shouldOpen = i === nextIdx
-      const curHeight = el.scrollHeight
-
-      el.style.height = 'auto'
-      const targetHeight = shouldOpen ? el.scrollHeight : 0
-
-      anime({
-        targets: el,
-        height: shouldOpen ? [0, targetHeight] : [curHeight, 0],
-        opacity: shouldOpen ? [0, 1] : [1, 0],
-        duration: 250,
-        easing: 'easeInOutQuad',
-        complete: () => {
-          if (shouldOpen && el) {
-            el.style.height = 'auto'
+    // Buka item baru jika ada
+    if (nextIdx !== null) {
+      const nextEl = answerRefs.current[nextIdx]
+      if (nextEl) {
+        // Baca tinggi alami SEBELUM mengubah style apapun
+        const naturalHeight = nextEl.scrollHeight
+        nextEl.style.height = '0px'
+        anime({
+          targets: nextEl,
+          height: [0, naturalHeight],
+          opacity: [0, 1],
+          duration: 280,
+          easing: 'easeOutQuad',
+          complete: () => {
+            if (nextEl) nextEl.style.height = 'auto'
           }
-        }
-      })
-    })
+        })
+      }
+    }
   }
 
   return (
@@ -959,11 +1097,10 @@ export function ClosingCTAWidget({ href, isLoggedIn }: { href: string; isLoggedI
           className="flex-shrink-0 inline-flex items-center gap-2 py-4 px-10 rounded-lg text-sm font-bold tracking-wider font-display uppercase transition-transform hover:scale-[1.03] active:scale-[0.98]"
           style={{ backgroundColor: 'var(--intensity)', color: 'var(--chalk)' }}
         >
-          {isLoggedIn ? 'Buka Dashboard' : 'Mulai Gratis Sekarang'}
+          {isLoggedIn ? 'Buka Dashboard' : 'Daftar Sekarang'}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
         </a>
       </div>
     </div>
   )
 }
-
