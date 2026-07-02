@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache'
 /**
  * Membuat sesi latihan (session) baru untuk tanggal hari ini.
  */
-export async function startWorkoutSession(planId: string | null) {
+export async function startWorkoutSession(planId: string | null, forceNew: boolean = false) {
   const supabase = await createClient()
 
   const {
@@ -18,18 +18,21 @@ export async function startWorkoutSession(planId: string | null) {
     throw new Error('Anda harus login untuk memulai latihan.')
   }
 
+  const todayStr = new Date().toISOString().split('T')[0]
+
   // Cek apakah hari ini sudah ada sesi aktif untuk plan yang sama
   // (untuk menghindari duplikasi jika tidak sengaja me-refresh)
-  const todayStr = new Date().toISOString().split('T')[0]
-  const { data: existingSession } = await supabase
-    .from('sessions')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('workout_date', todayStr)
-    .limit(1)
+  if (!forceNew) {
+    const { data: existingSession } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('workout_date', todayStr)
+      .limit(1)
 
-  if (existingSession && existingSession.length > 0) {
-    return existingSession[0]
+    if (existingSession && existingSession.length > 0) {
+      return existingSession[0]
+    }
   }
 
   const { data, error } = await supabase

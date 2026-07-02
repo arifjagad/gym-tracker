@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { StartWorkoutSelector } from '@/components/workout/start-workout-selector'
-import { WorkoutLogger } from '@/components/workout/workout-logger'
+import { WorkoutContainer } from '@/components/workout/workout-container'
 import { Dumbbell, Plus } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -21,78 +20,48 @@ export default async function WorkoutLoggerPage() {
 
   const todayStr = new Date().toISOString().split('T')[0]
 
-  // 1. Cek sesi aktif hari ini
-  const { data: activeSession } = await supabase
+  // 1. Cek sesi hari ini
+  const { data: todaySessions } = await supabase
     .from('sessions')
     .select('id, plan_id, workout_date, created_at')
     .eq('user_id', user.id)
     .eq('workout_date', todayStr)
-    .limit(1)
-    .maybeSingle()
+    .order('created_at', { ascending: false })
 
-  // 2. Jika ada sesi aktif, muat exercises dari plan
-  if (activeSession) {
-    let planDetails = null
-    if (activeSession.plan_id) {
-      const { data } = await supabase
-        .from('plans')
-        .select(`
-          id, name,
-          plan_categories (
-            id, category_name, day_of_week,
-            plan_exercises (
-              exercise_id,
-              exercises ( id, name, body_part, target, equipment, gif_url )
-            )
-          )
-        `)
-        .eq('id', activeSession.plan_id)
-        .single()
-      planDetails = data
-    }
-
-    return (
-      <div className="px-4 py-5">
-        <WorkoutLogger session={activeSession} planDetails={planDetails as any} />
-      </div>
-    )
-  }
-
-  // 3. Muat plans
+  // 2. Muat rencana latihan terperinci
   const { data: plans } = await supabase
     .from('plans')
     .select(`
       id, name,
-      plan_categories ( id, category_name, day_of_week )
+      plan_categories (
+        id, category_name, day_of_week,
+        plan_exercises (
+          exercise_id,
+          exercises ( id, name, body_part, target, equipment, gif_url )
+        )
+      )
     `)
     .order('created_at', { ascending: false })
 
   const availablePlans = plans || []
 
-  return (
-    <div className="px-4 py-5 space-y-6">
+  if (availablePlans.length === 0) {
+    return (
+      <div className="px-4 py-5 space-y-6">
+        {/* ── HEADER ── */}
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.25em] font-display mb-1" style={{ color: 'var(--intensity)' }}>
+            Sesi Latihan
+          </p>
+          <h1 className="font-display font-extrabold uppercase tracking-wide text-3xl" style={{ color: 'var(--chalk)' }}>
+            Catat Workout
+          </h1>
+          <p className="font-body text-xs mt-1" style={{ color: 'var(--chalk-muted)' }}>
+            Pilih template dan mulai catat setiap set hari ini.
+          </p>
+        </div>
 
-      {/* ── HEADER ── */}
-      <div>
-        <p
-          className="text-[9px] font-bold uppercase tracking-[0.3em] font-display mb-1"
-          style={{ color: 'var(--intensity)' }}
-        >
-          Sesi Latihan
-        </p>
-        <h1
-          className="font-display font-extrabold uppercase tracking-wide text-3xl"
-          style={{ color: 'var(--chalk)' }}
-        >
-          Catat Workout
-        </h1>
-        <p className="font-body text-xs mt-1" style={{ color: 'var(--chalk-muted)' }}>
-          Pilih template dan mulai catat setiap set hari ini.
-        </p>
-      </div>
-
-      {availablePlans.length === 0 ? (
-        /* ── EMPTY STATE ── */
+        {/* ── EMPTY STATE ── */}
         <div
           className="rounded-2xl p-10 flex flex-col items-center text-center gap-5"
           style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}
@@ -124,9 +93,13 @@ export default async function WorkoutLoggerPage() {
             Buat Template
           </Link>
         </div>
-      ) : (
-        <StartWorkoutSelector plans={availablePlans as any[]} />
-      )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-4 py-5">
+      <WorkoutContainer todaySessions={todaySessions || []} plans={availablePlans} />
     </div>
   )
 }

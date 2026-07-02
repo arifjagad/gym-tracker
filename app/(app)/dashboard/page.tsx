@@ -11,6 +11,7 @@ import { WeeklyVolumeChart } from '@/components/workout/weekly-volume-chart'
 import { ConsistencyGrid } from '@/components/workout/consistency-grid'
 import { MuscleHeatmap } from '@/components/workout/muscle-heatmap'
 import { Activity, Dumbbell, Trophy, ArrowRight, Flame, TrendingUp, Zap, Calendar } from 'lucide-react'
+import { PwaInstallBanner } from '@/components/pwa-install-banner'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,11 +59,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8">
+      <PwaInstallBanner pageKey="dashboard" />
 
       {/* ── PAGE HEADER ── */}
-      <div className="flex flex-col gap-4 text-left">
-        <div className="space-y-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.25em] font-display" style={{ color: 'var(--intensity)' }}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-left">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.25em] font-display mb-1" style={{ color: 'var(--intensity)' }}>
             {greeting}
           </p>
           <h1
@@ -71,14 +73,14 @@ export default async function DashboardPage() {
           >
             {firstName} 💪
           </h1>
-          <p className="font-body text-xs leading-relaxed" style={{ color: 'var(--chalk-muted)' }}>
+          <p className="font-body text-xs mt-1" style={{ color: 'var(--chalk-muted)' }}>
             Pantau performa, grafik volume angkatan, dan pencapaian rekor gym Anda.
           </p>
         </div>
 
         <Link
           href="/workout"
-          className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-xs font-bold tracking-wider font-display uppercase cursor-pointer transition-all hover:brightness-110 active:scale-[0.98]"
+          className="w-full sm:w-auto flex items-center justify-center gap-2.5 py-4 px-6 rounded-2xl text-xs font-bold tracking-wider font-display uppercase cursor-pointer transition-all hover:brightness-110 active:scale-[0.98]"
           style={{
             background: 'linear-gradient(135deg, var(--intensity), #ff6b4a)',
             color: '#fff',
@@ -92,7 +94,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ── METRIC SUMMARY CARDS ── */}
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
         {/* Card 1: Sesi Latihan */}
         <div
@@ -189,7 +191,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ── CHARTS ROW ── */}
-      <div className="grid grid-cols-1 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
           <WeeklyVolumeChart data={dailyChartData} />
         </div>

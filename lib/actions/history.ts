@@ -34,6 +34,7 @@ export interface SimpleExerciseItem {
   id: string
   name: string
   body_part: string | null
+  gif_url: string | null
 }
 
 export interface ProgressDataPoint {
@@ -154,7 +155,8 @@ export async function getUserExercisesList(): Promise<SimpleExerciseItem[]> {
       exercise_id,
       exercises (
         name,
-        body_part
+        body_part,
+        gif_url
       ),
       sessions!inner (
         user_id
@@ -173,12 +175,14 @@ export async function getUserExercisesList(): Promise<SimpleExerciseItem[]> {
     if (!exId) return
     const exName = log.exercises?.name || 'Gerakan Latihan'
     const bodyPart = log.exercises?.body_part || null
+    const gifUrl = log.exercises?.gif_url || null
 
     if (!exMap.has(exId)) {
       exMap.set(exId, {
         id: exId,
         name: exName,
         body_part: bodyPart,
+        gif_url: gifUrl,
       })
     }
   })

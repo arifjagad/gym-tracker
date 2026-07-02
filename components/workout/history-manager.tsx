@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, TrendingUp, Dumbbell } from 'lucide-react'
+import { Calendar, TrendingUp, Dumbbell, Play } from 'lucide-react'
 import { SessionHistoryCard } from './session-history-card'
 import { ExerciseProgressChart } from './exercise-progress-chart'
 import { HistorySession, SimpleExerciseItem } from '@/lib/actions/history'
@@ -25,6 +25,8 @@ export function HistoryManager({ sessions, exercisesList }: HistoryManagerProps)
     label: ex.name,
     sublabel: ex.body_part ? `Kategori: ${ex.body_part}` : undefined
   }))
+
+  const selectedExercise = exercisesList.find((ex) => ex.id === selectedExerciseId)
 
   return (
     <div className="space-y-6">
@@ -150,14 +152,102 @@ export function HistoryManager({ sessions, exercisesList }: HistoryManagerProps)
                 />
               </div>
 
-              {/* Progress Line Chart */}
+              {/* Visual Guide & Progress Chart Container */}
               {selectedExerciseId && (
-                <div className="animate-in fade-in duration-200">
-                  <ExerciseProgressChart exerciseId={selectedExerciseId} />
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  {/* Top: Visual Guide */}
+                  {selectedExercise?.gif_url && (
+                    <div 
+                      className="p-5 rounded-xl border flex flex-col items-center gap-3 w-full"
+                      style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
+                    >
+                      <div className="w-full text-left flex items-center gap-2">
+                        <Play className="w-5 h-5" style={{ color: 'var(--intensity)' }} />
+                        <h3 className="font-display text-lg font-bold uppercase tracking-wider animate-in fade-in duration-100" style={{ color: 'var(--chalk)' }}>
+                          Visual Gerakan
+                        </h3>
+                      </div>
+                      <GifPreview gifUrl={selectedExercise.gif_url} name={selectedExercise.name} />
+                    </div>
+                  )}
+
+                  {/* Bottom: Progress Chart */}
+                  <div className="w-full">
+                    <ExerciseProgressChart exerciseId={selectedExerciseId} />
+                  </div>
                 </div>
               )}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function getCleanGifUrl(workoutxGifUrl: string | null): string {
+  if (!workoutxGifUrl) return ''
+  const parts = workoutxGifUrl.split('/')
+  const lastPart = parts[parts.length - 1]
+  const id = lastPart.replace('.gif', '').padStart(4, '0')
+  return `https://cdn.jsdelivr.net/gh/omercotkd/exercises-gifs@main/assets/${id}.gif`
+}
+
+function GifPreview({ gifUrl, name }: { gifUrl: string; name: string }) {
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+  const cleanUrl = getCleanGifUrl(gifUrl)
+
+  return (
+    <div
+      className="w-full rounded-xl overflow-hidden relative border bg-white mx-auto max-w-[280px]"
+      style={{ aspectRatio: '1 / 1', borderColor: 'var(--border)' }}
+    >
+      {/* Skeleton shimmer */}
+      {!loaded && !error && (
+        <div className="absolute inset-0">
+          <div
+            className="w-full h-full"
+            style={{
+              background: 'linear-gradient(90deg, #f5f5f5 25%, #e9e9e9 50%, #f5f5f5 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'skeleton-shimmer 1.4s infinite linear',
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div
+              className="w-8 h-8 rounded-full border-2 animate-spin"
+              style={{ borderColor: 'rgba(232,67,44,0.3)', borderTopColor: 'var(--intensity)' }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* GIF */}
+      {!error && (
+        <img
+          src={cleanUrl}
+          alt={name}
+          loading="eager"
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+          className="w-full h-full object-cover transition-opacity duration-500 bg-white"
+          style={{
+            opacity: loaded ? 1 : 0,
+          }}
+        />
+      )}
+
+      {/* Fallback */}
+      {error && (
+        <div
+          className="w-full h-full flex flex-col items-center justify-center text-center p-4"
+          style={{ backgroundColor: 'var(--surface-raised)' }}
+        >
+          <span className="text-xl">📺</span>
+          <p className="text-[10px] font-body mt-1" style={{ color: 'var(--chalk-muted)' }}>
+            Gagal memuat visual
+          </p>
         </div>
       )}
     </div>

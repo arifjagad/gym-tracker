@@ -8,6 +8,7 @@ import { ExerciseLoggerCard } from './exercise-logger-card'
 import { createClient } from '@/lib/supabase/client'
 import { deleteWorkoutSessionAction } from '@/lib/actions/workout'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { sendLocalNotification } from '@/components/pwa-register'
 
 interface ExerciseDetail {
   id: string
@@ -67,10 +68,17 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
     if (typeof window !== 'undefined') {
       const completed = localStorage.getItem(`completed_session_${session.id}`) === 'true'
       setIsSessionCompleted(completed)
+      
+      const savedDuration = localStorage.getItem(`completed_duration_${session.id}`)
+      if (completed && savedDuration) {
+        setSeconds(parseInt(savedDuration))
+      }
     }
   }, [session.id])
 
   useEffect(() => {
+    if (isSessionCompleted) return
+
     // Hitung durasi awal berdasarkan selisih waktu dibuat
     const startMs = new Date(session.created_at).getTime()
     const updateTimer = () => {
@@ -82,7 +90,7 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
     updateTimer()
     const interval = setInterval(updateTimer, 1000)
     return () => clearInterval(interval)
-  }, [session.created_at])
+  }, [session.created_at, isSessionCompleted])
 
   // Formatter Waktu: HH:MM:SS
   const formatTime = (totalSeconds: number) => {
@@ -117,6 +125,7 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
       // Jika 0 logs, hapus sesi agar user tidak terkunci pada logger kosong
       try {
         await deleteWorkoutSessionAction(session.id)
+        localStorage.removeItem('active_session_id')
         router.push('/workout')
         router.refresh()
       } catch (err) {
@@ -125,7 +134,12 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
     } else {
       // Jika ada logs, simpan status selesai
       localStorage.setItem(`completed_session_${session.id}`, 'true')
+      localStorage.setItem(`completed_duration_${session.id}`, String(seconds))
+      localStorage.removeItem('active_session_id')
       setIsSessionCompleted(true)
+      
+      // Kirim notifikasi OS lokal
+      sendLocalNotification("Latihan Selesai! 🎉", "Sesi latihan Anda berhasil dicatat ke database.")
     }
   }
 
@@ -135,6 +149,8 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
     try {
       await deleteWorkoutSessionAction(session.id)
       localStorage.removeItem(`completed_session_${session.id}`)
+      localStorage.removeItem(`completed_duration_${session.id}`)
+      localStorage.removeItem('active_session_id')
       setIsSessionCompleted(false)
       router.push('/workout')
       router.refresh()

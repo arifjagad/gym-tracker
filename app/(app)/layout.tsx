@@ -17,7 +17,7 @@ import {
 const NAV_ITEMS = [
   { href: '/dashboard',  label: 'Beranda',  icon: LayoutDashboard },
   { href: '/history',    label: 'Riwayat',  icon: History          },
-  { href: '/workout',    label: 'Catat',    icon: Dumbbell,  cta: true },
+  { href: '/workout',    label: 'Latihan',  icon: Dumbbell,  cta: true },
   { href: '/exercises',  label: 'Gerakan',  icon: Library          },
   { href: '/settings',   label: 'Setelan',  icon: Settings         },
 ]

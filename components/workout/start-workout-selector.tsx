@@ -66,7 +66,10 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
     setLoading(true)
     setError(null)
     try {
-      await startWorkoutSession(planId)
+      const session = await startWorkoutSession(planId, true)
+      if (session && typeof window !== 'undefined') {
+        localStorage.setItem('active_session_id', session.id)
+      }
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal memulai latihan.')

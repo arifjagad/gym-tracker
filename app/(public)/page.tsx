@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Check, ArrowRight, Flame, Database, TrendingUp, Users, Dumbbell } from 'lucide-react'
+import { PwaInstallBanner } from '@/components/pwa-install-banner'
 import {
   PremiumFAQWidget,
   ConsistencyShowcaseWidget,
@@ -60,6 +61,8 @@ export default async function LandingPage() {
           {user ? 'Dashboard' : 'Masuk'}
         </Link>
       </header>
+
+      <PwaInstallBanner pageKey="main" />
 
       {/* ── HERO ── */}
       <section
