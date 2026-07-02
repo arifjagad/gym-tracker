@@ -5,6 +5,7 @@ import { Calendar, TrendingUp, Dumbbell } from 'lucide-react'
 import { SessionHistoryCard } from './session-history-card'
 import { ExerciseProgressChart } from './exercise-progress-chart'
 import { HistorySession, SimpleExerciseItem } from '@/lib/actions/history'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 interface HistoryManagerProps {
   sessions: HistorySession[]
@@ -18,6 +19,12 @@ export function HistoryManager({ sessions, exercisesList }: HistoryManagerProps)
   const [selectedExerciseId, setSelectedExerciseId] = useState<string>(
     exercisesList[0]?.id || ''
   )
+
+  const exerciseOptions = exercisesList.map((ex) => ({
+    value: ex.id,
+    label: ex.name,
+    sublabel: ex.body_part ? `Kategori: ${ex.body_part}` : undefined
+  }))
 
   return (
     <div className="space-y-6">
@@ -134,22 +141,13 @@ export function HistoryManager({ sessions, exercisesList }: HistoryManagerProps)
                   </p>
                 </div>
                 
-                <select
+                <SearchableSelect
+                  options={exerciseOptions}
                   value={selectedExerciseId}
-                  onChange={(e) => setSelectedExerciseId(e.target.value)}
-                  className="block w-full py-2.5 px-3 border rounded-lg focus:outline-none focus:ring-1 focus:ring-[--chalk-muted] text-sm font-body"
-                  style={{
-                    backgroundColor: 'var(--surface-raised)',
-                    borderColor: 'var(--border)',
-                    color: 'var(--chalk)',
-                  }}
-                >
-                  {exercisesList.map((ex) => (
-                    <option key={ex.id} value={ex.id}>
-                      {ex.name} {ex.body_part ? `(${ex.body_part})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedExerciseId}
+                  placeholder="Pilih Gerakan Latihan"
+                  searchPlaceholder="Cari gerakan gym..."
+                />
               </div>
 
               {/* Progress Line Chart */}

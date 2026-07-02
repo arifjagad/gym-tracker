@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Check, Plus, Trash2, Dumbbell, ChevronDown, Award, Eye, EyeOff } from 'lucide-react'
+import { Check, Plus, Trash2, Dumbbell, ChevronDown, Award, Eye, EyeOff, TrendingUp, Info } from 'lucide-react'
 import anime from 'animejs'
 import { getPreviousWorkoutStats, saveWorkoutLogAction, SetStat } from '@/lib/actions/workout'
 import { createClient } from '@/lib/supabase/client'
+import { useToast } from '@/components/ui/toast'
 
 interface ExerciseDetail {
   id: string
@@ -26,6 +27,17 @@ function getCleanGifUrl(workoutxGifUrl: string | null): string {
   const lastPart = parts[parts.length - 1]
   const id = lastPart.replace('.gif', '').padStart(4, '0')
   return `https://cdn.jsdelivr.net/gh/omercotkd/exercises-gifs@main/assets/${id}.gif`
+}
+
+function calculate1RM(weightStr: string, repsStr: string, fallbackWeight: number | null, fallbackReps: number | null): number | null {
+  const weight = weightStr !== '' ? parseFloat(weightStr) : fallbackWeight
+  const reps = repsStr !== '' ? parseInt(repsStr) : fallbackReps
+
+  if (!weight || !reps || weight <= 0 || reps <= 0) return null
+  
+  if (reps === 1) return weight
+  // Epley formula: 1RM = w * (1 + r / 30)
+  return Math.round(weight * (1 + reps / 30) * 10) / 10
 }
 
 function GifPreview({ gifUrl, name }: { gifUrl: string; name: string }) {
@@ -94,16 +106,18 @@ interface LocalSet {
   weight_kg: string
   reps: string
   completed: boolean
+  set_type: 'W' | 'D' | 'F' | 'R'
 }
 
 export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [showGif, setShowGif] = useState(false)
   const [sets, setSets] = useState<LocalSet[]>([
-    { set_number: 1, weight_kg: '', reps: '', completed: false }
+    { set_number: 1, weight_kg: '', reps: '', completed: false, set_type: 'R' }
   ])
   const [prevStats, setPrevStats] = useState<SetStat[]>([])
   const [saving, setSaving] = useState(false)
+  const { toast } = useToast()
 
   const contentRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -122,7 +136,7 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
         // 1. Ambil log sesi aktif saat ini untuk gerakan ini
         const { data: currentLogs } = await supabase
           .from('workout_logs')
-          .select('set_number, weight_kg, reps')
+          .select('set_number, weight_kg, reps, set_type')
           .eq('session_id', sessionId)
           .eq('exercise_id', exercise.id)
           .order('set_number', { ascending: true })
@@ -134,7 +148,7 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
         }
 
         // 3. Tentukan state awal sets
-        const currentLogsMap = new Map<number, { set_number: number; weight_kg: number | null; reps: number | null }>()
+        const currentLogsMap = new Map<number, { set_number: number; weight_kg: number | null; reps: number | null; set_type?: string }>()
         if (currentLogs) {
           currentLogs.forEach((log) => {
             currentLogsMap.set(log.set_number, log)
@@ -155,14 +169,16 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
               set_number: i,
               weight_kg: loggedSet.weight_kg !== null ? String(loggedSet.weight_kg) : '',
               reps: loggedSet.reps !== null ? String(loggedSet.reps) : '',
-              completed: true
+              completed: true,
+              set_type: (loggedSet.set_type as any) || 'R'
             })
           } else {
             initialSets.push({
               set_number: i,
               weight_kg: '',
               reps: '',
-              completed: false
+              completed: false,
+              set_type: (stats?.[i - 1]?.set_type as any) || 'R'
             })
           }
         }
@@ -218,7 +234,8 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
         return {
           set_number: set.set_number,
           weight_kg: finalWeight,
-          reps: finalReps
+          reps: finalReps,
+          set_type: set.set_type
         }
       })
 
@@ -233,9 +250,9 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
   // --- KELOLA SETS ---
   const addSet = () => {
     const nextSetNumber = sets.length + 1
-    const newSets = [
+    const newSets: LocalSet[] = [
       ...sets,
-      { set_number: nextSetNumber, weight_kg: '', reps: '', completed: false }
+      { set_number: nextSetNumber, weight_kg: '', reps: '', completed: false, set_type: 'R' }
     ]
     setSets(newSets)
     saveLogsToDB(newSets)
@@ -243,9 +260,26 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
 
   const deleteLastSet = () => {
     if (sets.length <= 1) return
-    const newSets = sets.slice(0, -1)
+    const newSets: LocalSet[] = sets.slice(0, -1)
     setSets(newSets)
     saveLogsToDB(newSets)
+  }
+
+  const cycleSetType = (index: number) => {
+    if (sets[index].completed) {
+      toast('Set ini sudah tersimpan. Batalkan centang terlebih dahulu untuk mengubah tipe set.', 'warning')
+      return
+    }
+    const types: ('R' | 'W' | 'D' | 'F')[] = ['R', 'W', 'D', 'F']
+    const currentType = sets[index].set_type || 'R'
+    const nextIndex = (types.indexOf(currentType) + 1) % types.length
+    const nextType = types[nextIndex]
+
+    const updated: LocalSet[] = sets.map((set, i) =>
+      i === index ? { ...set, set_type: nextType } : set
+    )
+    setSets(updated)
+    saveLogsToDB(updated)
   }
 
   const updateSetInput = (index: number, field: 'weight_kg' | 'reps', value: string) => {
@@ -391,82 +425,118 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
               const prev = prevStats[index]
               let rowRef: HTMLDivElement | null = null
 
+              // Hitung 1RM
+              const current1RM = calculate1RM(set.weight_kg, set.reps, null, null)
+              const prevWeight = prev?.weight_kg ?? null
+              const prevReps = prev?.reps ?? null
+              const active1RM = calculate1RM(set.weight_kg, set.reps, prevWeight, prevReps)
+              const display1RM = current1RM || (set.completed ? active1RM : null)
+
               return (
                 <div
                   key={set.set_number}
                   ref={(el) => { rowRef = el }}
-                  className="grid grid-cols-12 gap-2 items-center p-1.5 rounded-lg transition-colors duration-150 text-center"
+                  className="p-1.5 rounded-lg transition-colors duration-150 flex flex-col gap-1"
                   style={{
                     backgroundColor: set.completed ? 'rgba(124, 154, 92, 0.08)' : 'transparent'
                   }}
                 >
-                  {/* Nomor Set */}
-                  <span className="col-span-2 text-left font-numeric font-bold text-sm" style={{ color: 'var(--chalk)' }}>
-                    {set.set_number}
-                  </span>
+                  <div className="grid grid-cols-12 gap-2 items-center text-center">
+                    {/* Badge/Nomor Set - Klik untuk cycle tipe set */}
+                    <div className="col-span-2 text-left flex items-center justify-start">
+                      <button
+                        type="button"
+                        onClick={() => cycleSetType(index)}
+                        className={`w-7 h-7 rounded-full flex items-center justify-center font-display text-[10px] font-bold tracking-tight transition-all active:scale-90 border shadow-sm cursor-pointer ${
+                          set.set_type === 'W'
+                            ? 'bg-gradient-to-br from-amber-500/20 to-amber-500/5 border-amber-500/40 text-amber-400 hover:border-amber-500/60 shadow-[0_0_8px_rgba(245,158,11,0.15)] font-extrabold'
+                            : set.set_type === 'D'
+                            ? 'bg-gradient-to-br from-purple-500/20 to-purple-500/5 border-purple-500/40 text-purple-400 hover:border-purple-500/60 shadow-[0_0_8px_rgba(168,85,247,0.15)] font-extrabold'
+                            : set.set_type === 'F'
+                            ? 'bg-gradient-to-br from-red-500/20 to-red-500/5 border-red-500/40 text-red-400 hover:border-red-500/60 shadow-[0_0_8px_rgba(239,68,68,0.15)] font-extrabold'
+                            : 'bg-white/[0.02] border-white/10 text-[var(--chalk)] hover:bg-white/[0.06] hover:border-white/20'
+                        }`}
+                        style={{ borderColor: 'var(--border)' }}
+                        title={
+                          set.completed
+                            ? `Set ke-${set.set_number} — sudah tersimpan`
+                            : 'Klik untuk ubah tipe set (W/D/F/Regular)'
+                        }
+                      >
+                        {set.set_type === 'R' ? set.set_number : set.set_type}
+                      </button>
+                    </div>
 
-                  {/* Statistik Sebelumnya */}
-                  <span className="col-span-4 font-numeric text-xs flex items-center justify-center gap-1" style={{ color: 'var(--chalk-muted)' }}>
-                    {prev ? (
-                      <>
-                        <Award className="w-3.5 h-3.5" style={{ color: 'var(--progress)' }} />
-                        {prev.weight_kg}kg × {prev.reps}
-                      </>
-                    ) : (
-                      '—'
-                    )}
-                  </span>
+                    {/* Statistik Sebelumnya */}
+                    <span className="col-span-4 font-numeric text-xs flex items-center justify-center gap-1" style={{ color: 'var(--chalk-muted)' }}>
+                      {prev ? (
+                        <>
+                          <Award className="w-3.5 h-3.5" style={{ color: 'var(--progress)' }} />
+                          {prev.weight_kg}kg × {prev.reps}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </span>
 
-                  {/* Input Beban (KG) */}
-                  <div className="col-span-3">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      disabled={set.completed}
-                      value={set.weight_kg}
-                      onChange={(e) => updateSetInput(index, 'weight_kg', e.target.value)}
-                      placeholder={prev?.weight_kg ? String(prev.weight_kg) : '0'}
-                      className="block w-full text-center py-1.5 border rounded focus:outline-none focus:ring-1 focus:ring-[--chalk-muted] font-numeric text-xs disabled:opacity-50"
-                      style={{
-                        backgroundColor: 'var(--surface-raised)',
-                        borderColor: 'var(--border)',
-                        color: 'var(--chalk)',
-                      }}
-                    />
+                    {/* Input Beban (KG) */}
+                    <div className="col-span-3">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        disabled={set.completed}
+                        value={set.weight_kg}
+                        onChange={(e) => updateSetInput(index, 'weight_kg', e.target.value)}
+                        placeholder={prev?.weight_kg ? String(prev.weight_kg) : '0'}
+                        className="block w-full text-center py-1.5 border rounded focus:outline-none focus:ring-1 focus:ring-[--chalk-muted] font-numeric text-xs disabled:opacity-50"
+                        style={{
+                          backgroundColor: 'var(--surface-raised)',
+                          borderColor: 'var(--border)',
+                          color: 'var(--chalk)',
+                        }}
+                      />
+                    </div>
+
+                    {/* Input Reps */}
+                    <div className="col-span-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        disabled={set.completed}
+                        value={set.reps}
+                        onChange={(e) => updateSetInput(index, 'reps', e.target.value)}
+                        placeholder={prev?.reps ? String(prev.reps) : '0'}
+                        className="block w-full text-center py-1.5 border rounded focus:outline-none focus:ring-1 focus:ring-[--chalk-muted] font-numeric text-xs disabled:opacity-50"
+                        style={{
+                          backgroundColor: 'var(--surface-raised)',
+                          borderColor: 'var(--border)',
+                          color: 'var(--chalk)',
+                        }}
+                      />
+                    </div>
+
+                    {/* Tombol Check-off (Plate Slide) */}
+                    <div className="col-span-1 flex items-center justify-end">
+                      <button
+                        onClick={() => toggleSetComplete(index, rowRef)}
+                        className="p-1.5 rounded cursor-pointer transition-colors border"
+                        style={{
+                          borderColor: set.completed ? 'var(--progress)' : 'var(--border)',
+                          backgroundColor: set.completed ? 'var(--progress)' : 'transparent',
+                          color: set.completed ? 'var(--surface)' : 'var(--chalk-muted)'
+                        }}
+                      >
+                        <Check className="w-3.5 h-3.5 stroke-[3px]" />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Input Reps */}
-                  <div className="col-span-2">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      disabled={set.completed}
-                      value={set.reps}
-                      onChange={(e) => updateSetInput(index, 'reps', e.target.value)}
-                      placeholder={prev?.reps ? String(prev.reps) : '0'}
-                      className="block w-full text-center py-1.5 border rounded focus:outline-none focus:ring-1 focus:ring-[--chalk-muted] font-numeric text-xs disabled:opacity-50"
-                      style={{
-                        backgroundColor: 'var(--surface-raised)',
-                        borderColor: 'var(--border)',
-                        color: 'var(--chalk)',
-                      }}
-                    />
-                  </div>
-
-                  {/* Tombol Check-off (Plate Slide) */}
-                  <div className="col-span-1 flex items-center justify-end">
-                    <button
-                      onClick={() => toggleSetComplete(index, rowRef)}
-                      className="p-1.5 rounded cursor-pointer transition-colors border"
-                      style={{
-                        borderColor: set.completed ? 'var(--progress)' : 'var(--border)',
-                        backgroundColor: set.completed ? 'var(--progress)' : 'transparent',
-                        color: set.completed ? 'var(--surface)' : 'var(--chalk-muted)'
-                      }}
-                    >
-                      <Check className="w-3.5 h-3.5 stroke-[3px]" />
-                    </button>
-                  </div>
+                  {/* Estimasi 1RM sub-row */}
+                  {display1RM !== null && (
+                    <div className="flex justify-end pr-9 text-[9px] font-body animate-in fade-in duration-150" style={{ color: 'var(--chalk-muted)' }}>
+                      <span>Estimasi 1RM: <strong style={{ color: 'var(--intensity)' }}>{display1RM} kg</strong></span>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -491,6 +561,25 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
+          </div>
+
+          {/* Legend Tipe Set (Compact Single Row) */}
+          <div
+            className="flex items-center justify-center gap-1.5 pt-3.5 border-t"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <Info className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--intensity)' }} />
+            <span className="text-[9px] font-body whitespace-nowrap" style={{ color: 'var(--chalk-muted)' }}>
+              Ketuk nomor set:
+            </span>
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-500 border-amber-500/20 whitespace-nowrap">W</span>
+            <span className="text-[9px]" style={{ color: 'var(--chalk-muted)' }}>Warm-up</span>
+            <span className="text-[9px]" style={{ color: 'var(--border)' }}>•</span>
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border bg-purple-500/10 text-purple-500 border-purple-500/20 whitespace-nowrap">D</span>
+            <span className="text-[9px]" style={{ color: 'var(--chalk-muted)' }}>Drop set</span>
+            <span className="text-[9px]" style={{ color: 'var(--border)' }}>•</span>
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded border bg-red-500/10 text-red-500 border-red-500/20 whitespace-nowrap">F</span>
+            <span className="text-[9px]" style={{ color: 'var(--chalk-muted)' }}>Failure</span>
           </div>
         </div>
       </div>

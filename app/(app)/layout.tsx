@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { ToastProvider } from '@/components/ui/toast'
 import {
   LayoutDashboard,
   Dumbbell,
@@ -32,10 +33,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div
-      className="flex flex-col min-h-dvh"
-      style={{ backgroundColor: 'var(--bg-base)' }}
-    >
+    <ToastProvider>
+      <div
+        className="flex flex-col min-h-dvh"
+        style={{ backgroundColor: 'var(--bg-base)' }}
+      >
       {/* ── TOP HEADER (mobile) ── */}
       <header
         className="sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b"
@@ -139,6 +141,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </div>
       </nav>
-    </div>
+      </div>
+    </ToastProvider>
   )
 }

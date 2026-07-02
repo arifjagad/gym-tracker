@@ -6,11 +6,24 @@ import {
   getPersonalRecords,
   getMonthlyConsistencyData,
 } from '@/lib/actions/stats'
+import { getWeeklyMuscleHeatmap, getMuscleGroupPRs } from '@/lib/actions/history'
 import { WeeklyVolumeChart } from '@/components/workout/weekly-volume-chart'
 import { ConsistencyGrid } from '@/components/workout/consistency-grid'
-import { Activity, Dumbbell, Trophy, ArrowRight, Flame, TrendingUp, Zap } from 'lucide-react'
+import { MuscleHeatmap } from '@/components/workout/muscle-heatmap'
+import { Activity, Dumbbell, Trophy, ArrowRight, Flame, TrendingUp, Zap, Calendar } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
+
+function getBodyPartColor(part: string | null) {
+  const p = part?.toLowerCase() || ''
+  if (p.includes('chest')) return '#E07A5F' // Terracotta
+  if (p.includes('back')) return '#3F88C5' // Ocean Blue
+  if (p.includes('shoulder')) return '#8F5C9D' // Muted Plum
+  if (p.includes('arm')) return '#C65B7C' // Rosewood
+  if (p.includes('leg')) return '#5B8266' // Sage Green
+  if (p.includes('waist') || p.includes('abs')) return '#D98A29' // Ochre
+  return '#8D99AE' // Slate Gray
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -27,11 +40,13 @@ export default async function DashboardPage() {
     )
   }
 
-  const [weeklySummary, dailyChartData, personalRecords, consistencyGridData] = await Promise.all([
+  const [weeklySummary, dailyChartData, personalRecords, consistencyGridData, heatmapData, musclePRs] = await Promise.all([
     getWeeklyWorkoutSummary(),
     getDailyVolumeChartData(),
     getPersonalRecords(),
     getMonthlyConsistencyData(),
+    getWeeklyMuscleHeatmap(),
+    getMuscleGroupPRs(),
   ])
 
   const firstName = user.user_metadata?.full_name?.split(' ')[0]
@@ -183,6 +198,9 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* ── MUSCLE HEATMAP ── */}
+      <MuscleHeatmap data={heatmapData} prs={musclePRs} />
+
       {/* ── PERSONAL RECORDS ── */}
       <div
         className="p-6 rounded-2xl border space-y-5"
@@ -237,39 +255,61 @@ export default async function DashboardPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {personalRecords.map((pr) => (
-              <div
-                key={pr.exerciseId}
-                className="p-4 rounded-xl border flex flex-col justify-between gap-3 relative overflow-hidden"
-                style={{ backgroundColor: 'var(--surface-raised)', borderColor: 'var(--border)' }}
-              >
-                <div
-                  className="absolute top-0 right-0 w-16 h-16 rounded-full pointer-events-none"
-                  style={{ background: 'radial-gradient(circle, rgba(76,175,80,0.1) 0%, transparent 70%)', transform: 'translate(40%, -40%)' }}
-                />
-                <div>
-                  <h4 className="font-display text-[10px] font-bold uppercase tracking-wide truncate" style={{ color: 'var(--chalk)' }}>
-                    {pr.name}
-                  </h4>
-                  <p className="text-[8px] uppercase font-body tracking-widest mt-0.5" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                    {pr.bodyPart}
-                  </p>
+          <div className="flex flex-col gap-2">
+            {personalRecords.slice(0, 4).map((pr, idx) => {
+              const color = getBodyPartColor(pr.bodyPart)
+              return (
+                <div 
+                  key={pr.exerciseId}
+                  className="flex items-center justify-between p-3 rounded-xl border transition-all duration-200 hover:bg-white/[0.02] cursor-default"
+                  style={{ backgroundColor: 'var(--surface-raised)', borderColor: 'var(--border)' }}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Rank Number */}
+                    <span className="font-display font-extrabold text-[11px] opacity-25 w-4 text-center" style={{ color: 'var(--chalk)' }}>
+                      0{idx + 1}
+                    </span>
+
+                    {/* Minimalist Muscle Accent Line */}
+                    <div 
+                      className="w-1 h-6 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: color }}
+                    />
+
+                    <div className="text-left min-w-0">
+                      <h4 className="font-display text-xs font-bold uppercase tracking-wide truncate text-[var(--chalk)]">
+                        {pr.name}
+                      </h4>
+                      <p className="text-[9px] font-body opacity-50 uppercase tracking-widest mt-0.5" style={{ color: 'var(--chalk-muted)' }}>
+                        {pr.bodyPart || 'Umum'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right: PR Stats */}
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    <div className="text-right">
+                      <span className="font-numeric text-sm font-black text-[var(--chalk)]">
+                        {pr.maxWeightKg}
+                        <span className="text-[10px] font-normal opacity-50 ml-0.5" style={{ color: 'var(--chalk-muted)' }}>kg</span>
+                      </span>
+                      <p className="text-[9px] font-body opacity-50 mt-0.5" style={{ color: 'var(--chalk-muted)' }}>
+                        {pr.repsAtMax} reps
+                      </p>
+                    </div>
+                    
+                    {/* Compact Date Tag */}
+                    <div 
+                      className="hidden sm:flex items-center gap-1 text-[8px] font-body opacity-40 px-2 py-1 rounded border"
+                      style={{ borderColor: 'var(--border)', color: 'var(--chalk-muted)' }}
+                    >
+                      <Calendar className="w-2.5 h-2.5" />
+                      <span>{new Date(pr.dateAchieved).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-numeric text-xl font-extrabold" style={{ color: 'var(--progress)' }}>
-                    {pr.maxWeightKg}
-                    <span className="text-xs font-normal font-body ml-0.5" style={{ color: 'var(--chalk-muted)' }}>kg</span>
-                  </p>
-                  <p className="text-[9px] font-body" style={{ color: 'var(--chalk-muted)' }}>
-                    {pr.repsAtMax} reps
-                  </p>
-                  <p className="text-[8px] font-body mt-1" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                    {new Date(pr.dateAchieved).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                  </p>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

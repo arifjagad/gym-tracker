@@ -257,3 +257,157 @@ export async function getExerciseHistoryProgress(exerciseId: string): Promise<Pr
     })
     .sort((a, b) => a.dateStr.localeCompare(b.dateStr))
 }
+
+/**
+ * Menghitung jumlah sesi unik per muscle group (body_part) dalam minggu ini.
+ * Return: { chest: 2, back: 1, shoulders: 3, ... }
+ */
+export async function getWeeklyMuscleHeatmap(): Promise<Record<string, number>> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return {}
+
+  // Hitung awal minggu (Senin)
+  const now = new Date()
+  const dayOfWeek = now.getDay()
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() - daysToMonday)
+  weekStart.setHours(0, 0, 0, 0)
+  const weekStartStr = weekStart.toISOString().split('T')[0]
+
+  const { data: logs, error } = await supabase
+    .from('workout_logs')
+    .select(`
+      session_id,
+      exercises (body_part),
+      sessions!inner (workout_date, user_id)
+    `)
+    .eq('sessions.user_id', user.id)
+    .gte('sessions.workout_date', weekStartStr)
+
+  if (error || !logs || logs.length === 0) return {}
+
+  // Kelompokkan session_id unik per body_part
+  const bodyPartSessions: Record<string, Set<string>> = {}
+
+  logs.forEach((log: any) => {
+    const bodyPart = log.exercises?.body_part?.toLowerCase()?.trim()
+    const sessionId = log.session_id
+    if (!bodyPart || !sessionId) return
+
+    if (!bodyPartSessions[bodyPart]) {
+      bodyPartSessions[bodyPart] = new Set()
+    }
+    bodyPartSessions[bodyPart].add(sessionId)
+  })
+
+  // Konversi Set ke angka
+  const result: Record<string, number> = {}
+  for (const [bodyPart, sessions] of Object.entries(bodyPartSessions)) {
+    result[bodyPart] = sessions.size
+  }
+
+  return result
+}
+
+export interface MusclePR {
+  name: string
+  maxWeightKg: number
+  repsAtMax: number | null
+}
+
+/**
+ * Mengambil PR (Max Weight) dan 3 gerakan terfavorit untuk setiap kelompok otot (body_part) milik user.
+ */
+export async function getMuscleGroupPRs(): Promise<Record<string, MusclePR[]>> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return {}
+
+  const { data: logs, error } = await supabase
+    .from('workout_logs')
+    .select(`
+      reps,
+      weight_kg,
+      exercise_id,
+      exercises (
+        name,
+        body_part
+      ),
+      sessions!inner (
+        user_id,
+        workout_date
+      )
+    `)
+    .eq('sessions.user_id', user.id)
+
+  if (error || !logs || logs.length === 0) return {}
+
+  // 1. Cari PR (Max Weight) & total frekuensi dilakukan per exercise
+  const prMap = new Map<string, { name: string; bodyPart: string; maxWeightKg: number; reps: number; count: number }>()
+
+  logs.forEach((log: any) => {
+    const exId = log.exercise_id
+    const exName = log.exercises?.name || 'Gerakan Latihan'
+    const bodyPart = log.exercises?.body_part?.toLowerCase()?.trim() || 'umum'
+    const weight = log.weight_kg ? parseFloat(log.weight_kg) : 0
+    const reps = log.reps || 0
+
+    const existing = prMap.get(exId)
+    if (!existing) {
+      prMap.set(exId, {
+        name: exName,
+        bodyPart,
+        maxWeightKg: weight,
+        reps,
+        count: 1
+      })
+    } else {
+      existing.count += 1
+      if (weight > existing.maxWeightKg) {
+        existing.maxWeightKg = weight
+        existing.reps = reps
+      }
+    }
+  })
+
+  // 2. Kelompokkan per body_part
+  const grouped: Record<string, { name: string; maxWeightKg: number; repsAtMax: number; count: number }[]> = {}
+
+  prMap.forEach((val) => {
+    if (!grouped[val.bodyPart]) {
+      grouped[val.bodyPart] = []
+    }
+    grouped[val.bodyPart].push({
+      name: val.name,
+      maxWeightKg: val.maxWeightKg,
+      repsAtMax: val.reps,
+      count: val.count
+    })
+  })
+
+  // 3. Ambil top 3 gerakan terfavorit (berdasarkan count) untuk setiap body_part
+  const result: Record<string, MusclePR[]> = {}
+  for (const [bodyPart, exercises] of Object.entries(grouped)) {
+    const sorted = exercises
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
+      .map(ex => ({
+        name: ex.name,
+        maxWeightKg: ex.maxWeightKg,
+        repsAtMax: ex.repsAtMax
+      }))
+    result[bodyPart] = sorted
+  }
+
+  return result
+}

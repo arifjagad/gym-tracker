@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Dot } from 'recharts'
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { getExerciseHistoryProgress, ProgressDataPoint } from '@/lib/actions/history'
 import { Trophy, TrendingUp } from 'lucide-react'
 
@@ -55,19 +55,30 @@ export function ExerciseProgressChart({ exerciseId }: ExerciseProgressChartProps
   // Custom Dot renderer untuk menandai PR titik tertinggi
   const RenderCustomDot = (props: any) => {
     const { cx, cy, payload } = props
+    if (!cx || !cy) return null
     const val = metric === 'maxWeight' ? payload.maxWeightKg : payload.totalVolumeKg
 
     // Jika ini adalah titik tertinggi (rekor)
     if (val === peakVal && val > 0) {
+      const color = metric === 'maxWeight' ? 'var(--progress)' : 'var(--intensity)'
       return (
         <g key={props.key}>
-          <circle cx={cx} cy={cy} r={6} fill="var(--intensity)" stroke="var(--surface)" strokeWidth={2} />
-          <circle cx={cx} cy={cy} r={10} fill="none" stroke="var(--intensity)" strokeWidth={1} className="animate-ping" />
+          <circle cx={cx} cy={cy} r={5} fill={color} stroke="var(--surface)" strokeWidth={2} />
+          <circle 
+            cx={cx} 
+            cy={cy} 
+            r={9} 
+            fill="none" 
+            stroke={color} 
+            strokeWidth={1} 
+            className="animate-ping" 
+            style={{ transformOrigin: `${cx}px ${cy}px` }}
+          />
         </g>
       )
     }
 
-    return <circle key={props.key} cx={cx} cy={cy} r={4} fill="var(--chalk-muted)" stroke="var(--surface)" strokeWidth={1} />
+    return <circle key={props.key} cx={cx} cy={cy} r={3.5} fill="var(--border-strong)" stroke="var(--surface)" strokeWidth={1.5} />
   }
 
   // Custom Tooltip
@@ -103,20 +114,21 @@ export function ExerciseProgressChart({ exerciseId }: ExerciseProgressChartProps
     >
       {/* Toggles & Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-5 h-5" style={{ color: 'var(--progress)' }} />
-          <h3 className="font-display text-lg font-bold uppercase tracking-wider" style={{ color: 'var(--chalk)' }}>
+        <div className="flex items-center gap-2 text-left">
+          <TrendingUp className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--progress)' }} />
+          <h3 className="font-body text-xs font-extrabold uppercase tracking-widest" style={{ color: 'var(--chalk)' }}>
             Grafik Perkembangan
           </h3>
         </div>
 
         {/* Tab Metric Toggles */}
-        <div className="flex gap-1.5 p-1 rounded-lg border bg-[--surface-raised]" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex gap-1 p-1 rounded-xl border" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface-raised)' }}>
           <button
             onClick={() => setMetric('maxWeight')}
-            className="py-1 px-3 rounded text-[10px] font-bold font-display uppercase tracking-wider cursor-pointer"
+            className="py-1.5 px-3 rounded-lg text-[9px] font-extrabold font-body uppercase tracking-wider cursor-pointer transition-all"
             style={{
               backgroundColor: metric === 'maxWeight' ? 'var(--surface)' : 'transparent',
+              border: metric === 'maxWeight' ? '1px solid var(--border)' : '1px solid transparent',
               color: metric === 'maxWeight' ? 'var(--chalk)' : 'var(--chalk-muted)',
             }}
           >
@@ -124,9 +136,10 @@ export function ExerciseProgressChart({ exerciseId }: ExerciseProgressChartProps
           </button>
           <button
             onClick={() => setMetric('volume')}
-            className="py-1 px-3 rounded text-[10px] font-bold font-display uppercase tracking-wider cursor-pointer"
+            className="py-1.5 px-3 rounded-lg text-[9px] font-extrabold font-body uppercase tracking-wider cursor-pointer transition-all"
             style={{
               backgroundColor: metric === 'volume' ? 'var(--surface)' : 'transparent',
+              border: metric === 'volume' ? '1px solid var(--border)' : '1px solid transparent',
               color: metric === 'volume' ? 'var(--chalk)' : 'var(--chalk-muted)',
             }}
           >
@@ -138,8 +151,22 @@ export function ExerciseProgressChart({ exerciseId }: ExerciseProgressChartProps
       {/* Chart Box */}
       <div className="w-full h-[250px] font-numeric text-[10px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 15, left: -25, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(237, 233, 221, 0.05)" vertical={false} />
+          <AreaChart data={data} margin={{ top: 10, right: 15, left: -25, bottom: 0 }}>
+            <defs>
+              <linearGradient id="colorHistoryMetric" x1="0" y1="0" x2="0" y2="1">
+                <stop 
+                  offset="5%" 
+                  stopColor={metric === 'maxWeight' ? 'var(--progress)' : 'var(--intensity)'} 
+                  stopOpacity={0.2}
+                />
+                <stop 
+                  offset="95%" 
+                  stopColor={metric === 'maxWeight' ? 'var(--progress)' : 'var(--intensity)'} 
+                  stopOpacity={0.0}
+                />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.03)" vertical={false} />
             <XAxis
               dataKey="formattedDate"
               stroke="var(--chalk-muted)"
@@ -153,16 +180,18 @@ export function ExerciseProgressChart({ exerciseId }: ExerciseProgressChartProps
               axisLine={false}
               tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(237, 233, 221, 0.1)', strokeWidth: 1 }} />
-            <Line
+            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255, 255, 255, 0.04)', strokeWidth: 1 }} />
+            <Area
               type="monotone"
               dataKey={metric === 'maxWeight' ? 'maxWeightKg' : 'totalVolumeKg'}
               stroke={metric === 'maxWeight' ? 'var(--progress)' : 'var(--intensity)'}
               strokeWidth={2}
+              fillOpacity={1}
+              fill="url(#colorHistoryMetric)"
               dot={<RenderCustomDot />}
-              activeDot={{ r: 6 }}
+              activeDot={{ r: 5 }}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
 
@@ -171,7 +200,7 @@ export function ExerciseProgressChart({ exerciseId }: ExerciseProgressChartProps
         <Trophy className="w-4 h-4" style={{ color: 'var(--intensity)' }} />
         <div style={{ color: 'var(--chalk-muted)' }}>
           Rekor Pribadi Tertinggi (PR All-Time):{' '}
-          <span className="font-bold font-numeric text-[--chalk]">
+          <span className="font-bold font-numeric" style={{ color: 'var(--chalk)' }}>
             {metric === 'maxWeight'
               ? `${maxWeightVal} kg`
               : `${maxVolumeVal.toLocaleString('id-ID')} kg`}

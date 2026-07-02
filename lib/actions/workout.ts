@@ -57,7 +57,7 @@ export async function startWorkoutSession(planId: string | null) {
 export async function saveWorkoutLogAction(
   sessionId: string,
   exerciseId: string,
-  logs: { set_number: number; reps: number | null; weight_kg: number | null }[]
+  logs: { set_number: number; reps: number | null; weight_kg: number | null; set_type?: string }[]
 ) {
   const supabase = await createClient()
 
@@ -84,6 +84,7 @@ export async function saveWorkoutLogAction(
     set_number: log.set_number,
     reps: log.reps,
     weight_kg: log.weight_kg,
+    set_type: log.set_type || 'R',
   }))
 
   const { error: insertError } = await supabase
@@ -102,6 +103,7 @@ export interface SetStat {
   set_number: number
   reps: number | null
   weight_kg: number | null
+  set_type?: string
 }
 
 /**
@@ -124,6 +126,7 @@ export async function getPreviousWorkoutStats(exerciseId: string): Promise<SetSt
       set_number,
       reps,
       weight_kg,
+      set_type,
       sessions!inner (
         workout_date,
         user_id
@@ -149,6 +152,7 @@ export async function getPreviousWorkoutStats(exerciseId: string): Promise<SetSt
     set_number: log.set_number,
     reps: log.reps,
     weight_kg: log.weight_kg ? parseFloat(log.weight_kg) : null,
+    set_type: log.set_type,
   }))
 }
 

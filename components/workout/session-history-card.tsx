@@ -91,36 +91,47 @@ export function SessionHistoryCard({ session }: SessionHistoryCardProps) {
           ) : (
             <div className="space-y-4 pt-3">
               {session.exercises.map((group) => (
-                <div key={group.exerciseId} className="space-y-2">
+                <div key={group.exerciseId} className="space-y-2 pb-3 border-b last:border-0 last:pb-0" style={{ borderColor: 'var(--border)' }}>
                   {/* Judul Latihan */}
-                  <div className="flex items-center gap-1.5">
-                    <Dumbbell className="w-3.5 h-3.5" style={{ color: 'var(--chalk-muted)' }} />
-                    <h4 className="font-display text-base font-bold uppercase tracking-wide" style={{ color: 'var(--chalk)' }}>
-                      {group.exerciseName}
-                    </h4>
+                  <div className="flex items-start justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-2 text-left min-w-0">
+                      <Dumbbell className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--chalk-muted)' }} />
+                      <h4 className="font-display text-xs font-extrabold uppercase tracking-wide leading-tight" style={{ color: 'var(--chalk)' }}>
+                        {group.exerciseName}
+                      </h4>
+                    </div>
                     {group.bodyPart && (
                       <span
-                        className="px-1.5 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider font-body ml-2"
-                        style={{ backgroundColor: 'var(--surface-raised)', color: 'var(--chalk-muted)' }}
+                        className="px-1.5 py-0.5 rounded text-[7px] uppercase font-bold tracking-widest font-body flex-shrink-0 border"
+                        style={{ 
+                          backgroundColor: 'var(--surface-raised)', 
+                          borderColor: 'var(--border)',
+                          color: 'var(--chalk-muted)' 
+                        }}
                       >
                         {group.bodyPart}
                       </span>
                     )}
                   </div>
 
-                  {/* Grid Sets */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {/* Pills Sets */}
+                  <div className="flex flex-wrap gap-2 pt-1.5">
                     {group.sets.map((set) => (
                       <div
                         key={set.set_number}
-                        className="p-2.5 rounded-lg border flex items-center justify-between text-xs font-body"
+                        className="px-2.5 py-1.5 rounded-xl border flex items-center gap-2 text-[10px]"
                         style={{
                           backgroundColor: 'var(--surface-raised)',
                           borderColor: 'var(--border)'
                         }}
                       >
-                        <span className="opacity-45 font-bold">Set {set.set_number}</span>
-                        <span className="font-numeric font-semibold" style={{ color: 'var(--chalk)' }}>
+                        <span 
+                          className="w-4 h-4 rounded-full flex items-center justify-center font-display text-[8px] font-bold opacity-60 flex-shrink-0"
+                          style={{ backgroundColor: 'var(--border)', color: 'var(--chalk)' }}
+                        >
+                          {set.set_number}
+                        </span>
+                        <span className="font-numeric font-bold whitespace-nowrap" style={{ color: 'var(--chalk)' }}>
                           {set.weight_kg ?? '—'}kg × {set.reps ?? '—'}
                         </span>
                       </div>
