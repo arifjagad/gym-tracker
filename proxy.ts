@@ -44,8 +44,15 @@ export async function proxy(request: NextRequest) {
   // - Halaman Landing Page (/)
   // - Endpoint API (/api/*)
   // - Halaman Login (/login)
+  // - File PWA & Assets (/manifest.webmanifest, /manifest.json, /sw.js, /icon.svg)
   const isPublicPath =
-    path === '/' || path === '/login' || path.startsWith('/api/')
+    path === '/' ||
+    path === '/login' ||
+    path.startsWith('/api/') ||
+    path === '/manifest.webmanifest' ||
+    path === '/manifest.json' ||
+    path === '/sw.js' ||
+    path === '/icon.svg'
 
   // Kasus 1: User belum login & mencoba mengakses halaman terproteksi (dashboard, workout, dll)
   if (!user && !isPublicPath) {
