@@ -13,8 +13,8 @@ import { tapFeedback } from '@/lib/animations'
  * <button ref={ref} onPointerDown={onPointerDown}>Simpan</button>
  * ```
  */
-export function useTapFeedback() {
-  const ref = useRef<HTMLButtonElement>(null)
+export function useTapFeedback<T extends HTMLElement = HTMLButtonElement>() {
+  const ref = useRef<T>(null)
   const onPointerDown = () => ref.current && tapFeedback(ref.current)
   return { ref, onPointerDown }
 }

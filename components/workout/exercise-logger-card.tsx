@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Check, Plus, Trash2, Dumbbell, ChevronDown, Award } from 'lucide-react'
+import { Check, Plus, Trash2, Dumbbell, ChevronDown, Award, Eye, EyeOff } from 'lucide-react'
 import anime from 'animejs'
 import { getPreviousWorkoutStats, saveWorkoutLogAction, SetStat } from '@/lib/actions/workout'
+import { createClient } from '@/lib/supabase/client'
 
 interface ExerciseDetail {
   id: string
@@ -11,11 +12,81 @@ interface ExerciseDetail {
   body_part: string | null
   target: string | null
   equipment: string | null
+  gif_url: string | null
 }
 
 interface ExerciseLoggerCardProps {
   exercise: ExerciseDetail
   sessionId: string
+}
+
+function getCleanGifUrl(workoutxGifUrl: string | null): string {
+  if (!workoutxGifUrl) return ''
+  const parts = workoutxGifUrl.split('/')
+  const lastPart = parts[parts.length - 1]
+  const id = lastPart.replace('.gif', '').padStart(4, '0')
+  return `https://cdn.jsdelivr.net/gh/omercotkd/exercises-gifs@main/assets/${id}.gif`
+}
+
+function GifPreview({ gifUrl, name }: { gifUrl: string; name: string }) {
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+  const cleanUrl = getCleanGifUrl(gifUrl)
+
+  return (
+    <div
+      className="w-full rounded-xl overflow-hidden relative border bg-white mx-auto max-w-[280px]"
+      style={{ aspectRatio: '1 / 1', borderColor: 'var(--border)' }}
+    >
+      {/* Skeleton shimmer */}
+      {!loaded && !error && (
+        <div className="absolute inset-0">
+          <div
+            className="w-full h-full"
+            style={{
+              background: 'linear-gradient(90deg, #f5f5f5 25%, #e9e9e9 50%, #f5f5f5 75%)',
+              backgroundSize: '200% 100%',
+              animation: 'skeleton-shimmer 1.4s infinite linear',
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div
+              className="w-8 h-8 rounded-full border-2 animate-spin"
+              style={{ borderColor: 'rgba(232,67,44,0.3)', borderTopColor: 'var(--intensity)' }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* GIF */}
+      {!error && (
+        <img
+          src={cleanUrl}
+          alt={name}
+          loading="eager"
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+          className="w-full h-full object-cover transition-opacity duration-500 bg-white"
+          style={{
+            opacity: loaded ? 1 : 0,
+          }}
+        />
+      )}
+
+      {/* Fallback */}
+      {error && (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+          style={{ backgroundColor: 'var(--surface-raised)' }}
+        >
+          <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(232,67,44,0.1)' }}>
+            <span className="text-xl">🏋️</span>
+          </div>
+          <span className="text-[10px] font-body" style={{ color: 'var(--chalk-muted)' }}>Preview tidak tersedia</span>
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface LocalSet {
@@ -27,6 +98,7 @@ interface LocalSet {
 
 export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [showGif, setShowGif] = useState(false)
   const [sets, setSets] = useState<LocalSet[]>([
     { set_number: 1, weight_kg: '', reps: '', completed: false }
   ])
@@ -36,28 +108,71 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
   const contentRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
 
-  // Fetch previous logs for placeholder
+  const toggleGif = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setShowGif(!showGif)
+  }
+
+  // Fetch previous logs for placeholder AND load current session logs if any
   useEffect(() => {
-    async function loadStats() {
+    async function loadStatsAndCurrentLogs() {
       try {
+        const supabase = createClient()
+        
+        // 1. Ambil log sesi aktif saat ini untuk gerakan ini
+        const { data: currentLogs } = await supabase
+          .from('workout_logs')
+          .select('set_number, weight_kg, reps')
+          .eq('session_id', sessionId)
+          .eq('exercise_id', exercise.id)
+          .order('set_number', { ascending: true })
+
+        // 2. Ambil data angkatan sesi sebelumnya untuk target/placeholder
         const stats = await getPreviousWorkoutStats(exercise.id)
         if (stats && stats.length > 0) {
           setPrevStats(stats)
-          // Prefill default empty sets structure based on previous session set count
-          const initialSets = stats.map((stat) => ({
-            set_number: stat.set_number,
-            weight_kg: '',
-            reps: '',
-            completed: false
-          }))
-          setSets(initialSets)
         }
+
+        // 3. Tentukan state awal sets
+        const currentLogsMap = new Map<number, { set_number: number; weight_kg: number | null; reps: number | null }>()
+        if (currentLogs) {
+          currentLogs.forEach((log) => {
+            currentLogsMap.set(log.set_number, log)
+          })
+        }
+
+        const maxPrevSetNumber = stats ? stats.length : 0
+        const maxCurrentSetNumber = currentLogs && currentLogs.length > 0 
+          ? Math.max(...currentLogs.map(l => l.set_number)) 
+          : 0
+        const totalSetsToRender = Math.max(1, maxPrevSetNumber, maxCurrentSetNumber)
+
+        const initialSets: LocalSet[] = []
+        for (let i = 1; i <= totalSetsToRender; i++) {
+          const loggedSet = currentLogsMap.get(i)
+          if (loggedSet) {
+            initialSets.push({
+              set_number: i,
+              weight_kg: loggedSet.weight_kg !== null ? String(loggedSet.weight_kg) : '',
+              reps: loggedSet.reps !== null ? String(loggedSet.reps) : '',
+              completed: true
+            })
+          } else {
+            initialSets.push({
+              set_number: i,
+              weight_kg: '',
+              reps: '',
+              completed: false
+            })
+          }
+        }
+        setSets(initialSets)
       } catch (err) {
-        console.error(err)
+        console.error('Gagal memuat log latihan:', err)
       }
     }
-    loadStats()
-  }, [exercise.id])
+    loadStatsAndCurrentLogs()
+  }, [exercise.id, sessionId])
 
   // --- ANIMATION: RACK PULL (ACCORDION EXPANSION) ---
   const toggleAccordion = () => {
@@ -87,8 +202,10 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
   const saveLogsToDB = async (updatedSets: LocalSet[]) => {
     setSaving(true)
     try {
-      // Hanya kirim set yang diisi atau setidaknya valid
-      const logsToSend = updatedSets.map((set) => {
+      // Hanya kirim set yang diselesaikan (completed === true) ke database
+      const completedSets = updatedSets.filter(set => set.completed)
+      
+      const logsToSend = completedSets.map((set) => {
         // Fallback ke placeholder jika user mencentang tanpa mengisi nilai
         const prev = prevStats[set.set_number - 1]
         const finalWeight = set.weight_kg !== '' 
@@ -224,6 +341,41 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
         style={{ height: 0 }}
       >
         <div className="p-4 pt-0 border-t space-y-4" style={{ borderColor: 'var(--border)' }}>
+          {/* Visual Form Latihan Toggle & GIF */}
+          {exercise.gif_url && (
+            <div className="pt-3.5 border-b pb-3.5 flex flex-col gap-3" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--chalk-muted)' }}>
+                  Visual Gerakan Latihan
+                </span>
+                <button
+                  type="button"
+                  onClick={toggleGif}
+                  className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg border text-[9px] font-bold uppercase tracking-wider hover:bg-[--surface-raised] transition-colors cursor-pointer"
+                  style={{ borderColor: 'var(--border)', color: 'var(--chalk-muted)' }}
+                >
+                  {showGif ? (
+                    <>
+                      <EyeOff className="w-3 h-3" />
+                      Sembunyikan
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-3 h-3" />
+                      Lihat Gerakan
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {showGif && (
+                <div className="w-full flex justify-center animate-in fade-in slide-in-from-top-1 duration-200">
+                  <GifPreview gifUrl={exercise.gif_url} name={exercise.name} />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Header Tabel Set */}
           <div className="grid grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-center pt-3" style={{ color: 'var(--chalk-muted)' }}>
             <span className="col-span-2 text-left">Set</span>

@@ -20,7 +20,7 @@ export function PlanCard({ plan }: PlanCardProps) {
   const [showConfirm, setShowConfirm] = useState(false)
 
   const { ref: playRef, onPointerDown: playDown } = useTapFeedback()
-  const { ref: editRef, onPointerDown: editDown } = useTapFeedback()
+  const { ref: editRef, onPointerDown: editDown } = useTapFeedback<HTMLAnchorElement>()
   const { ref: deleteRef, onPointerDown: deleteDown } = useTapFeedback()
 
   const handleDelete = async () => {

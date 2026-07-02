@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronUp, ChevronDown, Trash2, Plus, X, Search, Dumbbell, Target, Save, ArrowLeft } from 'lucide-react'
+import { ChevronUp, ChevronDown, Trash2, Plus, X, Search, Dumbbell, Target, Save, ArrowLeft, Loader2 } from 'lucide-react'
 import { useTapFeedback } from '@/hooks/use-tap-feedback'
 import { savePlanDetailsAction, SaveCategoryInput } from '@/lib/actions/plans'
 import { createClient } from '@/lib/supabase/client'
@@ -16,6 +16,7 @@ interface ExerciseDetail {
   body_part: string | null
   target: string | null
   equipment: string | null
+  gif_url: string | null
 }
 
 interface LocalPlanExercise {
@@ -30,6 +31,195 @@ interface LocalCategory {
   category_name: string
   day_of_week: string | null
   plan_exercises: LocalPlanExercise[]
+}
+
+function getCleanGifUrl(workoutxGifUrl: string | null): string {
+  if (!workoutxGifUrl) return ''
+  const parts = workoutxGifUrl.split('/')
+  const lastPart = parts[parts.length - 1]
+  const id = lastPart.replace('.gif', '').padStart(4, '0')
+  return `https://cdn.jsdelivr.net/gh/omercotkd/exercises-gifs@main/assets/${id}.gif`
+}
+
+function SafeThumbnail({ src, alt }: { src: string; alt: string }) {
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center bg-[rgba(255,255,255,0.03)]">
+      {/* Spinner/Pulse Loader */}
+      {!loaded && !error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[rgba(255,255,255,0.05)] animate-pulse">
+          <Loader2 className="w-4 h-4 text-[var(--chalk-muted)] animate-spin" />
+        </div>
+      )}
+
+      {error ? (
+        <Dumbbell className="w-5 h-5 text-gray-500" />
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+          className={`w-full h-full object-contain transition-opacity duration-300 ${
+            loaded ? 'opacity-100' : 'opacity-0'
+          }`}
+          loading="lazy"
+        />
+      )}
+    </div>
+  )
+}
+const MUSCLE_TRANSLATIONS: Record<string, string> = {
+  'abductors': 'Paha Luar',
+  'abs': 'Perut',
+  'adductors': 'Paha Dalam',
+  'biceps': 'Bisep',
+  'calves': 'Betis',
+  'cardiovascular system': 'Kardio (Jantung)',
+  'delts': 'Bahu (Deltoids)',
+  'forearms': 'Lengan Bawah',
+  'glutes': 'Pantat (Glutes)',
+  'hamstrings': 'Paha Belakang',
+  'lats': 'Punggung Samping (Lats)',
+  'levator scapulae': 'Leher Atas',
+  'pectorals': 'Dada (Chest)',
+  'quads': 'Paha Depan (Quads)',
+  'quadriceps': 'Paha Depan (Quads)',
+  'serratus anterior': 'Dada Samping',
+  'spine': 'Tulang Belakang',
+  'trapezius': 'Pundak Atas (Traps)',
+  'traps': 'Pundak Atas (Traps)',
+  'triceps': 'Trisep',
+  'upper back': 'Punggung Atas'
+}
+
+const EQUIPMENT_TRANSLATIONS: Record<string, string> = {
+  'assisted': 'Dibantu Alat',
+  'assisted (towel)': 'Dibantu Alat (Handuk)',
+  'band': 'Tali Resistance',
+  'barbell': 'Barbell',
+  'body weight': 'Berat Badan',
+  'body weight (with resistance band)': 'Berat Badan & Tali',
+  'bosu ball': 'Bola Bosu',
+  'cable': 'Katrol (Cable)',
+  'dumbbell': 'Dumbbell',
+  'dumbbell (used as handles for deeper range)': 'Dumbbell (Pegang)',
+  'dumbbell, exercise ball': 'Dumbbell & Bola',
+  'dumbbell, exercise ball, tennis ball': 'Dumbbell, Bola & Tenis',
+  'elliptical machine': 'Mesin Eliptikal',
+  'ez barbell': 'Barbell EZ',
+  'ez barbell, exercise ball': 'Barbell EZ & Bola',
+  'hammer': 'Palu (Hammer)',
+  'kettlebell': 'Kettlebell',
+  'leverage machine': 'Mesin Leverage',
+  'medicine ball': 'Bola Medicine',
+  'olympic barbell': 'Barbell Olimpiade',
+  'resistance band': 'Karet Resistance',
+  'roller': 'Roller Busa',
+  'rope': 'Tali (Rope)',
+  'skierg machine': 'Mesin SkiErg',
+  'sled machine': 'Mesin Sled',
+  'smith machine': 'Smith Machine',
+  'stability ball': 'Bola Stabilitas',
+  'stationary bike': 'Sepeda Statis',
+  'stepmill machine': 'Mesin Stepmill',
+  'tire': 'Ban (Tire)',
+  'trap bar': 'Trap Bar',
+  'upper body ergometer': 'Ergometer Tubuh Atas',
+  'weighted': 'Beban Tambahan',
+  'wheel roller': 'Roda Ab Roller'
+}
+
+function getMuscleIndoName(eng: string | null): string {
+  if (!eng) return ''
+  const clean = eng.toLowerCase().trim()
+  return MUSCLE_TRANSLATIONS[clean] ? `${eng} (${MUSCLE_TRANSLATIONS[clean]})` : eng
+}
+
+function getEquipmentIndoName(eng: string | null): string {
+  if (!eng) return ''
+  const clean = eng.toLowerCase().trim()
+  return EQUIPMENT_TRANSLATIONS[clean] ? `${eng} (${EQUIPMENT_TRANSLATIONS[clean]})` : eng
+}
+
+function getMuscleBadgeLabel(eng: string | null): string {
+  if (!eng) return ''
+  const clean = eng.toLowerCase().trim()
+  return MUSCLE_TRANSLATIONS[clean] || eng
+}
+
+function getEquipmentBadgeLabel(eng: string | null): string {
+  if (!eng) return ''
+  const clean = eng.toLowerCase().trim()
+  return EQUIPMENT_TRANSLATIONS[clean] || eng
+}
+interface SearchFilters {
+  bodyPart?: string
+  target?: string
+  equipment?: string
+  nameText?: string
+}
+
+function parseIndonesianQuery(query: string): SearchFilters {
+  const normalized = query.toLowerCase().trim()
+  const filters: SearchFilters = {}
+  let remainingText = normalized
+
+  // 1. Map Muscle Groups / Body Parts
+  const muscleMap: { keys: string[]; bodyPart?: string; target?: string }[] = [
+    { keys: ['dada', 'pectoral', 'pecs', 'chest'], bodyPart: 'chest', target: 'pectorals' },
+    { keys: ['bahu', 'shoulder', 'deltoid', 'delts'], bodyPart: 'shoulders', target: 'delts' },
+    { keys: ['lengan', 'tangan', 'arm', 'arms'], bodyPart: 'upper arms' },
+    { keys: ['bicep', 'bisep'], bodyPart: 'upper arms', target: 'biceps' },
+    { keys: ['tricep', 'trisep'], bodyPart: 'upper arms', target: 'triceps' },
+    { keys: ['punggung', 'sayap', 'back', 'lat', 'lats'], bodyPart: 'back' },
+    { keys: ['paha depan', 'quads', 'quad', 'quadriceps'], bodyPart: 'upper legs', target: 'quads' },
+    { keys: ['paha belakang', 'hamstring', 'hamstrings'], bodyPart: 'upper legs', target: 'hamstrings' },
+    { keys: ['paha', 'kaki', 'leg', 'legs'], bodyPart: 'upper legs' },
+    { keys: ['pantat', 'pantad', 'bokong', 'glute', 'glutes'], bodyPart: 'upper legs', target: 'glutes' },
+    { keys: ['betis', 'calf', 'calves'], bodyPart: 'lower legs', target: 'calves' },
+    { keys: ['perut', 'abs', 'abdominals'], bodyPart: 'waist', target: 'abs' },
+    { keys: ['cardio', 'kardio', 'jantung', 'lari'], bodyPart: 'cardio', target: 'cardiovascular system' },
+    { keys: ['pundak', 'traps', 'trap', 'trapezius'], bodyPart: 'back', target: 'traps' },
+  ]
+
+  for (const item of muscleMap) {
+    for (const key of item.keys) {
+      if (normalized.includes(key)) {
+        if (item.bodyPart) filters.bodyPart = item.bodyPart
+        if (item.target) filters.target = item.target
+        remainingText = remainingText.replace(key, '').trim()
+        break
+      }
+    }
+  }
+
+  // 2. Map Equipment
+  const equipmentMap: { keys: string[]; value: string }[] = [
+    { keys: ['dumbbell', 'dumbel', 'dombel', 'db'], value: 'dumbbell' },
+    { keys: ['barbell', 'barbel', 'bb'], value: 'barbell' },
+    { keys: ['cable', 'kabel', 'katrol'], value: 'cable' },
+    { keys: ['machine', 'mesin', 'alat'], value: 'machine' },
+    { keys: ['bodyweight', 'berat badan', 'tanpa alat', 'lantai', 'push up', 'sit up', 'pull up'], value: 'body weight' },
+    { keys: ['band', 'karet', 'resistance'], value: 'band' },
+    { keys: ['kettlebell', 'ketel'], value: 'kettlebell' },
+    { keys: ['plate', 'lempengan'], value: 'plate' },
+  ]
+
+  for (const item of equipmentMap) {
+    for (const key of item.keys) {
+      if (normalized.includes(key)) {
+        filters.equipment = item.value
+        remainingText = remainingText.replace(key, '').trim()
+        break
+      }
+    }
+  }
+
+  filters.nameText = remainingText.replace(/\s+/g, ' ').trim()
+  return filters
 }
 
 interface PlanEditorProps {
@@ -65,11 +255,43 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<ExerciseDetail[]>([])
   const [searching, setSearching] = useState(false)
+  const [expandedGifId, setExpandedGifId] = useState<string | null>(null)
+  const [selectedMuscle, setSelectedMuscle] = useState('all')
+  const [selectedEquipment, setSelectedEquipment] = useState('all')
+  const [zoomExercise, setZoomExercise] = useState<ExerciseDetail | null>(null)
 
-  // State Save
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [catIdToDelete, setCatIdToDelete] = useState<string | null>(null)
+  
+  // State Dynamic Filter Metadata from DB
+  const [availableTargets, setAvailableTargets] = useState<string[]>([])
+  const [availableEquipments, setAvailableEquipments] = useState<string[]>([])
+
+  useEffect(() => {
+    async function loadFilterMetadata() {
+      try {
+        const { data, error } = await supabase
+          .from('exercises')
+          .select('target, equipment')
+
+        if (!error && data) {
+          const targets = Array.from(new Set(data.map(r => r.target).filter(Boolean))) as string[]
+          const equipments = Array.from(new Set(data.map(r => r.equipment).filter(Boolean))) as string[]
+
+          targets.sort()
+          equipments.sort()
+
+          setAvailableTargets(targets)
+          setAvailableEquipments(equipments)
+        }
+      } catch (err) {
+        console.error('Error loading dynamic filters:', err)
+      }
+    }
+    loadFilterMetadata()
+  }, [])
 
   const { ref: saveBtnRef, onPointerDown: saveBtnDown } = useTapFeedback()
 
@@ -160,24 +382,59 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
   const openCatalog = (catId: string) => {
     setActiveCategoryId(catId)
     setSearchQuery('')
+    setSelectedMuscle('all')
+    setSelectedEquipment('all')
     setSearchResults([])
+    setExpandedGifId(null)
     setIsCatalogOpen(true)
+    
+    // Load initial popular exercises immediately
+    searchExercises('', 'all', 'all')
   }
 
-  const searchExercises = async (query: string) => {
-    setSearchQuery(query)
-    if (query.trim().length < 2) {
-      setSearchResults([])
-      return
-    }
-    
+  const searchExercises = async (query: string, muscle: string = 'all', eq: string = 'all') => {
     setSearching(true)
     try {
-      const { data, error } = await supabase
+      let q = supabase
         .from('exercises')
-        .select('id, name, body_part, target, equipment')
-        .ilike('name', `%${query}%`)
-        .limit(15)
+        .select('id, name, body_part, target, equipment, gif_url')
+
+      const conditions: string[] = []
+
+      // 1. Text Search (if provided)
+      if (query.trim().length >= 2) {
+        const searchFilters = parseIndonesianQuery(query)
+        const orConditions: string[] = []
+        
+        // Match query string in name
+        orConditions.push(`name.ilike.%${query.trim()}%`)
+
+        // Match translated Indonesian query terms
+        if (searchFilters.target) {
+          orConditions.push(`target.ilike.%${searchFilters.target}%`)
+        } else if (searchFilters.bodyPart) {
+          orConditions.push(`body_part.ilike.%${searchFilters.bodyPart}%`)
+        }
+
+        q = q.or(orConditions.join(','))
+
+        // If Indonesian query maps to equipment
+        if (searchFilters.equipment) {
+          q = q.ilike('equipment', searchFilters.equipment)
+        }
+      }
+
+      // 2. Select2 Muscle Filter
+      if (muscle !== 'all') {
+        q = q.ilike('target', muscle)
+      }
+
+      // 3. Select2 Equipment Filter
+      if (eq !== 'all') {
+        q = q.ilike('equipment', eq)
+      }
+
+      const { data, error } = await q.limit(30)
 
       if (!error && data) {
         setSearchResults(data)
@@ -520,7 +777,10 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => searchExercises(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  searchExercises(e.target.value, selectedMuscle, selectedEquipment)
+                }}
                 placeholder="Cari gerakan... (min 2 karakter)"
                 className="block w-full pl-10 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-1 focus:ring-[--chalk-muted] text-sm font-body"
                 style={{
@@ -530,6 +790,66 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
                 }}
                 autoFocus
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('')
+                    searchExercises('', selectedMuscle, selectedEquipment)
+                    setExpandedGifId(null)
+                  }}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-[var(--chalk-muted)] hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Select2 Muscle and Equipment Dropdowns */}
+            <div className="grid grid-cols-2 gap-2 pb-1">
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase tracking-wider text-[var(--chalk-muted)]">
+                  Target Otot
+                </label>
+                <SearchableSelect
+                  options={[
+                    { value: 'all', label: 'Semua Otot' },
+                    ...availableTargets.map((t) => ({
+                      value: t,
+                      label: getMuscleIndoName(t),
+                    }))
+                  ]}
+                  value={selectedMuscle}
+                  onChange={(val) => {
+                    setSelectedMuscle(val)
+                    searchExercises(searchQuery, val, selectedEquipment)
+                  }}
+                  placeholder="Semua Otot"
+                  searchPlaceholder="Cari otot..."
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold uppercase tracking-wider text-[var(--chalk-muted)]">
+                  Peralatan
+                </label>
+                <SearchableSelect
+                  options={[
+                    { value: 'all', label: 'Semua Alat' },
+                    ...availableEquipments.map((eq) => ({
+                      value: eq,
+                      label: getEquipmentIndoName(eq),
+                    }))
+                  ]}
+                  value={selectedEquipment}
+                  onChange={(val) => {
+                    setSelectedEquipment(val)
+                    searchExercises(searchQuery, selectedMuscle, val)
+                  }}
+                  placeholder="Semua Alat"
+                  searchPlaceholder="Cari alat..."
+                />
+              </div>
             </div>
 
             {/* Results Container */}
@@ -539,26 +859,36 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
                   Mencari gerakan...
                 </div>
               ) : searchResults.length === 0 ? (
-                <div className="py-8 text-center text-xs font-body" style={{ color: 'var(--chalk-muted)' }}>
-                  {searchQuery.trim().length < 2
-                    ? 'Ketik minimal 2 karakter untuk memulai pencarian.'
-                    : 'Tidak ada hasil gerakan yang cocok.'}
+                <div className="py-8 text-center text-xs font-body animate-pulse" style={{ color: 'var(--chalk-muted)' }}>
+                  Tidak ada hasil gerakan yang cocok. Cari nama gerakan lain, atau ubah filter kategori di atas.
                 </div>
               ) : (
                 searchResults.map((ex) => (
                   <div
                     key={ex.id}
-                    className="p-3 rounded-lg border flex items-center justify-between gap-3 hover:bg-[--surface-raised] transition-colors"
+                    className="p-2.5 rounded-xl border flex items-center gap-3 hover:bg-[--surface-raised] transition-colors"
                     style={{ borderColor: 'var(--border)' }}
                   >
-                    <div>
-                      <p className="text-sm font-bold font-body" style={{ color: 'var(--chalk)' }}>
+                    {/* Left: Tiny GIF Thumbnail Preview directly visible (Click to Zoom) */}
+                    <button 
+                      type="button"
+                      onClick={() => setZoomExercise(ex)}
+                      title="Ketuk untuk perbesar"
+                      className="w-12 h-12 rounded-lg overflow-hidden bg-white flex items-center justify-center flex-shrink-0 border cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                      style={{ borderColor: 'var(--border)' }}
+                    >
+                      <SafeThumbnail src={getCleanGifUrl(ex.gif_url)} alt={ex.name} />
+                    </button>
+
+                    {/* Middle: Name and Badges */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold font-body text-white truncate leading-snug" title={ex.name}>
                         {ex.name}
                       </p>
-                      <div className="flex flex-wrap gap-1.5 pt-1">
+                      <div className="flex flex-wrap gap-1 pt-1.5">
                         {ex.body_part && (
                           <span
-                            className="px-2 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider font-body"
+                            className="px-1.5 py-0.5 rounded text-[7px] uppercase font-bold tracking-wider font-body"
                             style={{ backgroundColor: 'var(--surface-raised)', color: 'var(--chalk-muted)' }}
                           >
                             {ex.body_part}
@@ -566,28 +896,29 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
                         )}
                         {ex.target && (
                           <span
-                            className="px-2 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider font-body flex items-center gap-0.5"
-                            style={{ backgroundColor: 'rgba(232, 67, 44, 0.1)', color: 'var(--intensity)' }}
+                            className="px-1.5 py-0.5 rounded text-[7px] uppercase font-bold tracking-wider font-body flex items-center gap-0.5"
+                            style={{ backgroundColor: 'rgba(232, 67, 44, 0.08)', color: 'var(--intensity)' }}
                           >
-                            <Target className="w-2.5 h-2.5" />
-                            {ex.target}
+                            <Target className="w-2 h-2" />
+                            {getMuscleBadgeLabel(ex.target)}
                           </span>
                         )}
                         {ex.equipment && (
-                          <span className="text-[9px] font-body opacity-60 flex items-center gap-1" style={{ color: 'var(--chalk-muted)' }}>
-                            <Dumbbell className="w-3 h-3" />
-                            {ex.equipment}
+                          <span className="text-[8px] font-body opacity-60 flex items-center gap-0.5 text-[var(--chalk-muted)]">
+                            <Dumbbell className="w-2.5 h-2.5" />
+                            {getEquipmentBadgeLabel(ex.equipment)}
                           </span>
                         )}
                       </div>
                     </div>
 
+                    {/* Right: Pilih Button */}
                     <button
                       onClick={() => addExerciseToCategory(ex)}
-                      className="py-1.5 px-3 rounded-lg text-[10px] font-bold font-display uppercase tracking-wider cursor-pointer"
+                      className="py-1.5 px-3 rounded-lg text-[9px] font-bold font-display uppercase tracking-wider cursor-pointer flex-shrink-0 text-white"
                       style={{
                         backgroundColor: 'var(--intensity)',
-                        color: 'var(--chalk)',
+                        backgroundImage: 'linear-gradient(135deg, var(--intensity), #ff5a3d)',
                       }}
                     >
                       Pilih
@@ -623,6 +954,83 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
         confirmText="Ya, Hapus"
         cancelText="Batal"
       />
+
+      {/* Lightbox / Zoom Exercise GIF Preview Modal */}
+      {zoomExercise && (
+        <>
+          <div
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setZoomExercise(null)}
+          />
+          <div
+            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[101] w-[90%] max-w-[340px] rounded-3xl p-5 flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200"
+            style={{
+              backgroundColor: 'var(--surface)',
+              border: '1px solid var(--border-strong)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div className="w-full flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--intensity)] font-display">
+                Preview Gerakan
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoomExercise(null)}
+                className="p-1 rounded-full hover:bg-[--surface-raised] text-[var(--chalk-muted)] hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div
+              className="w-full aspect-square rounded-2xl bg-white overflow-hidden border flex items-center justify-center p-2"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <img
+                src={getCleanGifUrl(zoomExercise.gif_url)}
+                alt={zoomExercise.name}
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            <div className="w-full text-center space-y-1">
+              <h4 className="font-display font-bold text-sm text-white leading-snug">
+                {zoomExercise.name}
+              </h4>
+              <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+                {zoomExercise.body_part && (
+                  <span className="px-1.5 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider font-body bg-[--surface-raised] text-[--chalk-muted]">
+                    {zoomExercise.body_part}
+                  </span>
+                )}
+                {zoomExercise.target && (
+                  <span className="px-1.5 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider font-body bg-[rgba(232,67,44,0.08)] text-[--intensity]">
+                    {getMuscleBadgeLabel(zoomExercise.target)}
+                  </span>
+                )}
+                {zoomExercise.equipment && (
+                  <span className="px-1.5 py-0.5 rounded text-[8px] uppercase font-bold tracking-wider font-body bg-[--surface-raised] text-[--chalk-muted]">
+                    {getEquipmentBadgeLabel(zoomExercise.equipment)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setZoomExercise(null)}
+              className="w-full py-2.5 rounded-xl text-xs font-bold font-display uppercase tracking-wider cursor-pointer transition-all active:scale-[0.98] text-white"
+              style={{
+                backgroundColor: 'var(--surface-raised)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              Tutup
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

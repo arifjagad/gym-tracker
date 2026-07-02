@@ -42,7 +42,7 @@ export default async function WorkoutLoggerPage() {
             id, category_name, day_of_week,
             plan_exercises (
               exercise_id,
-              exercises ( id, name, body_part, target, equipment )
+              exercises ( id, name, body_part, target, equipment, gif_url )
             )
           )
         `)

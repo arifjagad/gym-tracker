@@ -15,6 +15,7 @@ interface ExerciseDetail {
   body_part: string | null
   target: string | null
   equipment: string | null
+  gif_url: string | null
 }
 
 interface PlanExercise {

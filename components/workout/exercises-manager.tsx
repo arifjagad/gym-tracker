@@ -39,7 +39,7 @@ function getCleanGifUrl(workoutxGifUrl: string | null): string {
   const parts = workoutxGifUrl.split('/')
   const lastPart = parts[parts.length - 1]
   const id = lastPart.replace('.gif', '').padStart(4, '0')
-  return `https://raw.githubusercontent.com/omercotkd/exercises-gifs/main/assets/${id}.gif`
+  return `https://cdn.jsdelivr.net/gh/omercotkd/exercises-gifs@main/assets/${id}.gif`
 }
 
 function GifPreview({ gifUrl, name }: { gifUrl: string; name: string }) {
