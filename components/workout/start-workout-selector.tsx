@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Play, Calendar, Zap, ChevronRight, Search, X, Check, ChevronDown, Layers, Plus, Edit2 } from 'lucide-react'
 import { startWorkoutSession } from '@/lib/actions/workout'
+import { isBrowserOffline, addToSyncQueue } from '@/lib/offline-sync'
 import Link from 'next/link'
 
 interface CategoryItem {
@@ -65,6 +66,19 @@ export function StartWorkoutSelector({ plans }: StartWorkoutSelectorProps) {
     if (!planId) return
     setLoading(true)
     setError(null)
+    
+    // Intersepsi Offline
+    if (isBrowserOffline()) {
+      const tempSessionId = `temp_session_${Date.now()}`
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('active_session_id', tempSessionId)
+        localStorage.setItem(`temp_plan_id_${tempSessionId}`, planId)
+      }
+      addToSyncQueue('START_SESSION', tempSessionId, { planId })
+      router.refresh()
+      return
+    }
+
     try {
       const session = await startWorkoutSession(planId, true)
       if (session && typeof window !== 'undefined') {

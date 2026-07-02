@@ -6,6 +6,7 @@ import anime from 'animejs'
 import { getPreviousWorkoutStats, saveWorkoutLogAction, SetStat } from '@/lib/actions/workout'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/components/ui/toast'
+import { isBrowserOffline, addToSyncQueue } from '@/lib/offline-sync'
 
 interface ExerciseDetail {
   id: string
@@ -131,24 +132,40 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
   useEffect(() => {
     async function loadStatsAndCurrentLogs() {
       try {
-        const supabase = createClient()
-        
-        // 1. Ambil log sesi aktif saat ini untuk gerakan ini
-        const { data: currentLogs } = await supabase
-          .from('workout_logs')
-          .select('set_number, weight_kg, reps, set_type')
-          .eq('session_id', sessionId)
-          .eq('exercise_id', exercise.id)
-          .order('set_number', { ascending: true })
+        let currentLogs: any[] = []
+        const offline = isBrowserOffline() || sessionId.startsWith('temp_session_')
 
-        // 2. Ambil data angkatan sesi sebelumnya untuk target/placeholder
-        const stats = await getPreviousWorkoutStats(exercise.id)
-        if (stats && stats.length > 0) {
-          setPrevStats(stats)
+        if (offline) {
+          const cached = localStorage.getItem(`cached_logs_${sessionId}_${exercise.id}`)
+          if (cached) {
+            currentLogs = JSON.parse(cached)
+          }
+        } else {
+          const supabase = createClient()
+          const { data } = await supabase
+            .from('workout_logs')
+            .select('set_number, weight_kg, reps, set_type')
+            .eq('session_id', sessionId)
+            .eq('exercise_id', exercise.id)
+            .order('set_number', { ascending: true })
+          if (data) {
+            currentLogs = data
+          }
+        }
+
+        // Ambil target/placeholder sesi sebelumnya (aman dengan try-catch)
+        let stats: SetStat[] = []
+        try {
+          stats = await getPreviousWorkoutStats(exercise.id)
+          if (stats && stats.length > 0) {
+            setPrevStats(stats)
+          }
+        } catch (err) {
+          console.warn('Failed to fetch previous stats (offline mode):', err)
         }
 
         // 3. Tentukan state awal sets
-        const currentLogsMap = new Map<number, { set_number: number; weight_kg: number | null; reps: number | null; set_type?: string }>()
+        const currentLogsMap = new Map<number, { set_number: number; weight_kg: any; reps: any; set_type?: string }>()
         if (currentLogs) {
           currentLogs.forEach((log) => {
             currentLogsMap.set(log.set_number, log)
@@ -167,8 +184,8 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
           if (loggedSet) {
             initialSets.push({
               set_number: i,
-              weight_kg: loggedSet.weight_kg !== null ? String(loggedSet.weight_kg) : '',
-              reps: loggedSet.reps !== null ? String(loggedSet.reps) : '',
+              weight_kg: loggedSet.weight_kg !== null && loggedSet.weight_kg !== undefined ? String(loggedSet.weight_kg) : '',
+              reps: loggedSet.reps !== null && loggedSet.reps !== undefined ? String(loggedSet.reps) : '',
               completed: true,
               set_type: (loggedSet.set_type as any) || 'R'
             })
@@ -239,7 +256,16 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
         }
       })
 
-      await saveWorkoutLogAction(sessionId, exercise.id, logsToSend)
+      const offline = isBrowserOffline() || sessionId.startsWith('temp_session_')
+
+      if (offline) {
+        // Simpan ke Cache Lokal HP
+        localStorage.setItem(`cached_logs_${sessionId}_${exercise.id}`, JSON.stringify(logsToSend))
+        // Antrekan sinkronisasi ke server
+        addToSyncQueue('SAVE_LOGS', sessionId, { exerciseId: exercise.id, logs: logsToSend })
+      } else {
+        await saveWorkoutLogAction(sessionId, exercise.id, logsToSend)
+      }
     } catch (err) {
       console.error('Gagal autosave log set:', err)
     } finally {

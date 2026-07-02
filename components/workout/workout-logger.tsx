@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { deleteWorkoutSessionAction } from '@/lib/actions/workout'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { sendLocalNotification } from '@/components/pwa-register'
+import { isBrowserOffline, addToSyncQueue } from '@/lib/offline-sync'
 
 interface ExerciseDetail {
   id: string
@@ -194,6 +195,54 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
   const confirmFinishSession = async () => {
     setShowFinishConfirm(false)
     
+    const offline = isBrowserOffline()
+
+    if (offline) {
+      // Cek apakah ada logs yang diisi secara offline
+      let hasLogs = false
+      const planCategories = planDetails?.plan_categories || []
+      for (const cat of planCategories) {
+        for (const pe of cat.plan_exercises) {
+          const cached = localStorage.getItem(`cached_logs_${session.id}_${pe.exercise_id}`)
+          if (cached) {
+            const parsed = JSON.parse(cached)
+            if (parsed && parsed.length > 0) {
+              hasLogs = true
+              break
+            }
+          }
+        }
+        if (hasLogs) break
+      }
+
+      if (!hasLogs) {
+        // Hapus sesi kosong offline
+        localStorage.removeItem('active_session_id')
+        localStorage.removeItem(`temp_plan_id_${session.id}`)
+        addToSyncQueue('DELETE_SESSION', session.id, {})
+        router.push('/workout')
+        router.refresh()
+      } else {
+        // Simpan status selesai sesi offline
+        localStorage.setItem(`completed_session_${session.id}`, 'true')
+        localStorage.setItem(`completed_duration_${session.id}`, String(seconds))
+        localStorage.removeItem('active_session_id')
+        addToSyncQueue('FINISH_SESSION', session.id, { duration: seconds })
+        setIsSessionCompleted(true)
+
+        // Feedback & Notifikasi
+        sendLocalNotification("Latihan Selesai! 🎉", "Sesi latihan offline Anda disimpan di HP.")
+        if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate([100, 50, 100])
+        }
+        if (typeof window !== 'undefined' && 'clearAppBadge' in navigator) {
+          navigator.clearAppBadge().catch((err) => console.error(err))
+        }
+      }
+      return
+    }
+
+    // --- MODE ONLINE ---
     // Cek apakah ada logs yang terisi di session ini
     const { count, error } = await supabase
       .from('workout_logs')
@@ -235,6 +284,20 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
   // Aksi eksekusi restart sesi latihan setelah dikonfirmasi
   const confirmRestartSession = async () => {
     setShowRestartConfirm(false)
+
+    if (isBrowserOffline()) {
+      localStorage.removeItem(`completed_session_${session.id}`)
+      localStorage.removeItem(`completed_duration_${session.id}`)
+      localStorage.removeItem('active_session_id')
+      localStorage.removeItem(`temp_plan_id_${session.id}`)
+      addToSyncQueue('DELETE_SESSION', session.id, {})
+      
+      setIsSessionCompleted(false)
+      router.push('/workout')
+      router.refresh()
+      return
+    }
+
     try {
       await deleteWorkoutSessionAction(session.id)
       localStorage.removeItem(`completed_session_${session.id}`)
