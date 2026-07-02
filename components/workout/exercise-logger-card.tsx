@@ -304,6 +304,9 @@ export function ExerciseLoggerCard({ exercise, sessionId }: ExerciseLoggerCardPr
 
     // Jalankan animasi slide jika diselesaikan (checked)
     if (nextCompleteState && rowEl) {
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate(40)
+      }
       anime({
         targets: rowEl,
         translateX: [0, 8, -4, 0],

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Timer, Dumbbell, Award, ArrowRight, AlertTriangle } from 'lucide-react'
+import { Timer, Dumbbell, Award, ArrowRight, AlertTriangle, Share2 } from 'lucide-react'
 import { useTapFeedback } from '@/hooks/use-tap-feedback'
 import { ExerciseLoggerCard } from './exercise-logger-card'
 import { createClient } from '@/lib/supabase/client'
@@ -92,6 +92,85 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
     return () => clearInterval(interval)
   }, [session.created_at, isSessionCompleted])
 
+  // --- PWA: APP BADGING API ---
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'setAppBadge' in navigator && !isSessionCompleted) {
+      navigator.setAppBadge().catch((err) => console.error(err))
+    }
+    return () => {
+      if (typeof window !== 'undefined' && 'clearAppBadge' in navigator) {
+        navigator.clearAppBadge().catch((err) => console.error(err))
+      }
+    }
+  }, [isSessionCompleted])
+
+  // --- PWA: SCREEN WAKE LOCK API ---
+  const wakeLockRef = useRef<any>(null)
+
+  const requestWakeLock = async () => {
+    if (typeof window !== 'undefined' && 'wakeLock' in navigator && !isSessionCompleted) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen')
+        console.log('Screen Wake Lock acquired')
+      } catch (err) {
+        console.error('Failed to acquire Screen Wake Lock:', err)
+      }
+    }
+  }
+
+  const releaseWakeLock = async () => {
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release()
+        wakeLockRef.current = null
+        console.log('Screen Wake Lock released')
+      } catch (err) {
+        console.error('Failed to release Screen Wake Lock:', err)
+      }
+    }
+  }
+
+  useEffect(() => {
+    requestWakeLock()
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        await requestWakeLock()
+      } else {
+        await releaseWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      releaseWakeLock()
+    }
+  }, [isSessionCompleted])
+
+  // --- PWA: WEB SHARE API ---
+  const handleShare = async () => {
+    const text = `Saya baru saja menyelesaikan latihan "${planDetails?.name || 'Latihan Bebas'}" selama ${formatTime(seconds)} menggunakan aplikasi GymTracker! 🔥💪`
+    if (typeof window !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Sesi Latihan GymTracker Selesai!',
+          text: text,
+          url: window.location.origin
+        })
+      } catch (err) {
+        console.error('Batal berbagi:', err)
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(text)
+        alert('Ringkasan latihan berhasil disalin ke papan klip!')
+      } catch (err) {
+        console.error(err)
+      }
+    }
+  }
+
   // Formatter Waktu: HH:MM:SS
   const formatTime = (totalSeconds: number) => {
     const hrs = Math.floor(totalSeconds / 3600)
@@ -140,6 +219,16 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
       
       // Kirim notifikasi OS lokal
       sendLocalNotification("Latihan Selesai! 🎉", "Sesi latihan Anda berhasil dicatat ke database.")
+
+      // Haptic Vibration: getar ganda
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([100, 50, 100])
+      }
+
+      // Bersihkan badge ikon aplikasi PWA
+      if (typeof window !== 'undefined' && 'clearAppBadge' in navigator) {
+        navigator.clearAppBadge().catch((err) => console.error(err))
+      }
     }
   }
 
@@ -151,6 +240,12 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
       localStorage.removeItem(`completed_session_${session.id}`)
       localStorage.removeItem(`completed_duration_${session.id}`)
       localStorage.removeItem('active_session_id')
+
+      // Bersihkan badge ikon aplikasi PWA
+      if (typeof window !== 'undefined' && 'clearAppBadge' in navigator) {
+        navigator.clearAppBadge().catch((err) => console.error(err))
+      }
+
       setIsSessionCompleted(false)
       router.push('/workout')
       router.refresh()
@@ -210,12 +305,25 @@ export function WorkoutLogger({ session, planDetails }: WorkoutLoggerProps) {
           </button>
 
           <button
+            onClick={handleShare}
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-display font-bold uppercase tracking-wider text-xs active:scale-[0.98] transition-all cursor-pointer"
+            style={{
+              backgroundColor: 'var(--surface-raised)',
+              color: 'var(--chalk)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            Bagikan Ringkasan
+            <Share2 className="w-3.5 h-3.5" style={{ color: 'var(--intensity)' }} />
+          </button>
+
+          <button
             onClick={() => setShowRestartConfirm(true)}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-display font-bold uppercase tracking-wider text-xs active:scale-[0.98] transition-all cursor-pointer"
             style={{
-              backgroundColor: 'var(--surface-raised)',
+              backgroundColor: 'transparent',
               color: 'var(--chalk-muted)',
-              border: '1px solid var(--border)',
+              border: '1px solid transparent',
             }}
           >
             Mulai Latihan Baru Hari Ini
