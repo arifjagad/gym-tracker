@@ -2,9 +2,12 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Play, Edit2, Trash2, AlertTriangle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Play, Edit2, Trash2, AlertTriangle, Share2 } from 'lucide-react'
 import { useTapFeedback } from '@/hooks/use-tap-feedback'
 import { deletePlanAction } from '@/lib/actions/plans'
+import { startWorkoutSession } from '@/lib/actions/workout'
+import { isBrowserOffline, addToSyncQueue } from '@/lib/offline-sync'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 interface PlanCardProps {
@@ -16,7 +19,9 @@ interface PlanCardProps {
 }
 
 export function PlanCard({ plan }: PlanCardProps) {
+  const router = useRouter()
   const [deleting, setDeleting] = useState(false)
+  const [starting, setStarting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
   const { ref: playRef, onPointerDown: playDown } = useTapFeedback()
@@ -31,6 +36,60 @@ export function PlanCard({ plan }: PlanCardProps) {
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Gagal menghapus template.')
       setDeleting(false)
+    }
+  }
+
+  const handleStartWorkout = async () => {
+    setStarting(true)
+    
+    // Intersepsi Offline
+    if (isBrowserOffline()) {
+      const tempSessionId = `temp_session_${Date.now()}`
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('active_session_id', tempSessionId)
+        localStorage.setItem(`temp_plan_id_${tempSessionId}`, plan.id)
+      }
+      addToSyncQueue('START_SESSION', tempSessionId, { planId: plan.id })
+      router.push('/workout')
+      router.refresh()
+      return
+    }
+
+    try {
+      const session = await startWorkoutSession(plan.id, true)
+      if (session && typeof window !== 'undefined') {
+        localStorage.setItem('active_session_id', session.id)
+      }
+      router.push('/workout')
+      router.refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal memulai latihan.')
+      setStarting(false)
+    }
+  }
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const shareUrl = `${window.location.origin}/plans/share/${plan.id}`
+    const text = `Gunakan template rencana latihan "${plan.name}" saya di aplikasi GymTracker! 🏋️‍♂️💪`
+    
+    if (typeof window !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Rencana Latihan: ${plan.name}`,
+          text: text,
+          url: shareUrl
+        })
+      } catch (err) {
+        console.error('Batal berbagi:', err)
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl)
+        alert('Tautan rencana latihan berhasil disalin ke papan klip!')
+      } catch (err) {
+        console.error(err)
+      }
     }
   }
 
@@ -59,16 +118,35 @@ export function PlanCard({ plan }: PlanCardProps) {
           <button
             ref={playRef}
             onPointerDown={playDown}
-            disabled={deleting}
-            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold font-display uppercase tracking-wider cursor-pointer disabled:opacity-50"
+            onClick={handleStartWorkout}
+            disabled={deleting || starting}
+            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold font-display uppercase tracking-wider cursor-pointer disabled:opacity-50 active:scale-[0.98] transition-all"
             style={{
               backgroundColor: 'var(--surface-raised)',
               color: 'var(--chalk)',
               border: '1px solid var(--border)',
             }}
           >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            Mulai Latihan
+            {starting ? (
+              <div className="w-3.5 h-3.5 rounded-full border border-gray-400 border-t-white animate-spin" />
+            ) : (
+              <Play className="w-3.5 h-3.5 fill-current" />
+            )}
+            Mulai
+          </button>
+
+          {/* Bagikan */}
+          <button
+            onClick={handleShare}
+            disabled={deleting}
+            className="p-2 rounded-lg border cursor-pointer hover:bg-[--surface-raised] transition-colors disabled:opacity-50"
+            style={{
+              borderColor: 'var(--border)',
+              color: 'var(--chalk-muted)',
+            }}
+            title="Bagikan Template"
+          >
+            <Share2 className="w-4 h-4" style={{ color: 'var(--intensity)' }} />
           </button>
 
           {/* Edit */}

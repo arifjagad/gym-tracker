@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronUp, ChevronDown, Trash2, Plus, X, Search, Dumbbell, Target, Save, ArrowLeft, Loader2 } from 'lucide-react'
+import { ChevronUp, ChevronDown, Trash2, Plus, X, Search, Dumbbell, Target, Save, ArrowLeft, Loader2, Share2 } from 'lucide-react'
 import { useTapFeedback } from '@/hooks/use-tap-feedback'
 import { savePlanDetailsAction, SaveCategoryInput } from '@/lib/actions/plans'
 import { createClient } from '@/lib/supabase/client'
@@ -503,6 +503,30 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
     }
   }
 
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/plans/share/${plan.id}`
+    const text = `Gunakan template rencana latihan "${planName}" saya di aplikasi GymTracker! 🏋️‍♂️💪`
+    
+    if (typeof window !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Rencana Latihan: ${planName}`,
+          text: text,
+          url: shareUrl
+        })
+      } catch (err) {
+        console.error('Batal berbagi:', err)
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl)
+        alert('Tautan rencana latihan berhasil disalin ke papan klip!')
+      } catch (err) {
+        console.error(err)
+      }
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Navigation & Action Buttons */}
@@ -527,21 +551,35 @@ export function PlanEditor({ plan, initialCategories }: PlanEditorProps) {
           </div>
         </div>
 
-        <button
-          ref={saveBtnRef}
-          onPointerDown={saveBtnDown}
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl text-xs font-bold tracking-wider font-display uppercase cursor-pointer disabled:opacity-50 transition-all active:scale-[0.98]"
-          style={{
-            backgroundColor: 'var(--intensity)',
-            backgroundImage: 'linear-gradient(135deg, var(--intensity), #ff5a3d)',
-            color: 'var(--chalk)',
-          }}
-        >
-          <Save className="w-3.5 h-3.5" />
-          {saving ? 'Menyimpan...' : 'Simpan Rencana'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            ref={saveBtnRef}
+            onPointerDown={saveBtnDown}
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-xl text-xs font-bold tracking-wider font-display uppercase cursor-pointer disabled:opacity-50 transition-all active:scale-[0.98]"
+            style={{
+              backgroundColor: 'var(--intensity)',
+              backgroundImage: 'linear-gradient(135deg, var(--intensity), #ff5a3d)',
+              color: 'var(--chalk)',
+            }}
+          >
+            <Save className="w-3.5 h-3.5" />
+            {saving ? 'Menyimpan...' : 'Simpan Rencana'}
+          </button>
+          
+          <button
+            onClick={handleShare}
+            className="flex-shrink-0 flex items-center justify-center p-3 rounded-xl border cursor-pointer hover:bg-[--surface-raised] transition-colors"
+            style={{
+              borderColor: 'var(--border)',
+              color: 'var(--chalk)',
+            }}
+            title="Bagikan Template"
+          >
+            <Share2 className="w-4 h-4" style={{ color: 'var(--intensity)' }} />
+          </button>
+        </div>
       </div>
 
       {error && (

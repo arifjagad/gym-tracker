@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -157,4 +158,130 @@ export async function savePlanDetailsAction(planId: string, name: string, catego
   revalidatePath('/workout')
   revalidatePath('/workout/plans')
   return { success: true }
+}
+
+/**
+ * Server Action untuk mengambil rincian rencana latihan yang dibagikan secara publik.
+ * Membaca data menggunakan Admin Client agar bisa melewati batasan RLS (public view).
+ */
+export async function getSharedPlanAction(planId: string) {
+  const adminSupabase = createAdminClient()
+
+  // 1. Ambil data plan utama
+  const { data: plan, error: planError } = await adminSupabase
+    .from('plans')
+    .select('id, name')
+    .eq('id', planId)
+    .single()
+
+  if (planError || !plan) {
+    throw new Error('Rencana latihan tidak ditemukan atau sudah dihapus.')
+  }
+
+  // 2. Ambil kategori beserta relasi exercises
+  const { data: categories, error: catError } = await adminSupabase
+    .from('plan_categories')
+    .select(`
+      id,
+      category_name,
+      day_of_week,
+      plan_exercises (
+        exercise_id,
+        sort_order,
+        exercises (
+          id,
+          name,
+          body_part,
+          target,
+          equipment
+        )
+      )
+    `)
+    .eq('plan_id', planId)
+    .order('created_at', { ascending: true })
+
+  if (catError) {
+    throw new Error(`Gagal memuat kategori rencana latihan: ${catError.message}`)
+  }
+
+  // Urutkan plan_exercises berdasarkan sort_order untuk tiap kategori
+  const formattedCategories = (categories || []).map((cat) => ({
+    ...cat,
+    plan_exercises: [...(cat.plan_exercises || [])].sort((a: any, b: any) => a.sort_order - b.sort_order)
+  }))
+
+  return {
+    plan,
+    categories: formattedCategories
+  }
+}
+
+/**
+ * Server Action untuk menduplikasi rencana latihan milik orang lain ke akun pengguna aktif.
+ */
+export async function importSharedPlanAction(planId: string) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    throw new Error('Anda harus login untuk mengimpor rencana latihan.')
+  }
+
+  // 1. Tarik rincian rencana latihan asal (melewati RLS via Admin Client)
+  const sharedPlanData = await getSharedPlanAction(planId)
+
+  // 2. Buat plans baru untuk user aktif
+  const { data: newPlan, error: newPlanError } = await supabase
+    .from('plans')
+    .insert({
+      name: `${sharedPlanData.plan.name} (Salinan)`,
+      user_id: user.id
+    })
+    .select()
+    .single()
+
+  if (newPlanError || !newPlan) {
+    throw new Error(`Gagal mengimpor rencana latihan: ${newPlanError?.message}`)
+  }
+
+  // 3. Salin kategori dan exercises secara bertahap
+  for (const cat of sharedPlanData.categories) {
+    const { data: newCat, error: newCatError } = await supabase
+      .from('plan_categories')
+      .insert({
+        plan_id: newPlan.id,
+        category_name: cat.category_name,
+        day_of_week: cat.day_of_week
+      })
+      .select()
+      .single()
+
+    if (newCatError || !newCat) {
+      throw new Error(`Gagal menggandakan kategori "${cat.category_name}": ${newCatError?.message}`)
+    }
+
+    if (cat.plan_exercises && cat.plan_exercises.length > 0) {
+      const formattedExercises = cat.plan_exercises.map((pe: any) => ({
+        category_id: newCat.id,
+        exercise_id: pe.exercise_id,
+        sort_order: pe.sort_order
+      }))
+
+      const { error: newExError } = await supabase
+        .from('plan_exercises')
+        .insert(formattedExercises)
+
+      if (newExError) {
+        throw new Error(`Gagal menggandakan gerakan latihan: ${newExError.message}`)
+      }
+    }
+  }
+
+  revalidatePath('/workout/plans')
+  revalidatePath('/workout')
+  return newPlan
 }

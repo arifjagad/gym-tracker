@@ -16,7 +16,11 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      const redirectUrl = `${window.location.origin}/api/auth/callback`
+      const searchParams = new URLSearchParams(window.location.search)
+      const nextPath = searchParams.get('redirect')
+      const redirectUrl = `${window.location.origin}/api/auth/callback${
+        nextPath ? `?next=${encodeURIComponent(nextPath)}` : ''
+      }`
       console.log('DEBUG: Attempting signInWithOAuth with redirectUrl:', redirectUrl)
       
       const res = await supabase.auth.signInWithOAuth({
